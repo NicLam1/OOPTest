@@ -1,0 +1,55 @@
+# Maven target directory
+target/
+
+# Eclipse specific files
+*.classpath
+*.project
+*.settings/
+
+# IntelliJ IDEA specific files
+*.iml
+.idea/
+*.iws
+out/
+
+# NetBeans specific files
+nbproject/private/
+build/
+nbbuild/
+dist/
+nbdist/
+.nb-gradle/
+
+# VS Code specific files
+.vscode/
+
+# MacOS specific files
+.DS_Store
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.swp
+
+# Ignore compiled class files
+*.class
+
+# Ignore package files
+*.jar
+*.war
+*.ear
+
+# Ignore Haarcascades and models if they are large or can be regenerated
+backend/src/main/resources/haarcascades/
+backend/src/main/resources/models/
+
+# Ignore sensitive files
+*.key
+*.pem
+*.p12
+*.crt
+
+# Node.js dependencies
+node_modules/
