@@ -1,40 +1,64 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
+import Cropper from 'react-easy-crop';
 import './App.css';
+import getCroppedImg from './cropImage';
+
+const cropSizes = {
+  '2x2': { label: '2x2 inches (US and India)', aspect: 1 }, 
+  '35x45': { label: '35x45 mm (UK, Europe, Australia, Singapore, Nigeria)', aspect: 35 / 45 },
+  '5x7': { label: '5x7 cm (Canada)', aspect: 5 / 7 },
+  '33x48': { label: '33x48 mm (China)', aspect: 33 / 48 },
+};
 
 function App() {
   const [selectedFile, setSelectedFile] = useState(null);
+  const [imageUrl, setImageUrl] = useState(null);
   const [processedImage, setProcessedImage] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
+  const [crop, setCrop] = useState({ x: 0, y: 0 });
+  const [zoom, setZoom] = useState(1);
+  const [croppedAreaPixels, setCroppedAreaPixels] = useState(null);
+  const [selectedSize, setSelectedSize] = useState('35x45'); // default
+
   const handleFileChange = (event) => {
-    setSelectedFile(event.target.files[0]);
+    const file = event.target.files[0];
+    setSelectedFile(file);
+    setImageUrl(URL.createObjectURL(file));
     setProcessedImage(null);
     setError(null);
+    setZoom(1); // reset zoom
   };
+
+  const onCropComplete = useCallback((croppedArea, croppedAreaPixels) => {
+    setCroppedAreaPixels(croppedAreaPixels);
+  }, []);
 
   const handleSubmit = async (event) => {
     event.preventDefault();
-    
-    if (!selectedFile) {
-      setError("Please select an image first.");
+
+    if (!imageUrl || !croppedAreaPixels) {
+      setError("Please select and crop an image first.");
       return;
     }
-    
-    const formData = new FormData();
-    formData.append('image', selectedFile);
-    
+
     try {
       setLoading(true);
+      const croppedBlob = await getCroppedImg(imageUrl, croppedAreaPixels);
+
+      const formData = new FormData();
+      formData.append('image', croppedBlob, 'cropped.jpg');
+
       const response = await fetch('http://localhost:8080/api/process-photo', {
         method: 'POST',
         body: formData,
       });
-      
+
       if (!response.ok) {
         throw new Error(`Server responded with ${response.status}`);
       }
-      
+
       const blob = await response.blob();
       setProcessedImage(URL.createObjectURL(blob));
     } catch (err) {
@@ -60,6 +84,49 @@ function App() {
               onChange={handleFileChange}
             />
           </div>
+
+          <div className="dropdown-container">
+            <label htmlFor="size-select">Select photo size:</label>
+            <select
+              id="size-select"
+              value={selectedSize}
+              onChange={(e) => setSelectedSize(e.target.value)}
+            >
+              {Object.entries(cropSizes).map(([key, { label }]) => (
+                <option key={key} value={key}>{label}</option>
+              ))}
+            </select>
+          </div>
+
+          {imageUrl && (
+            <>
+              <div className="crop-container">
+                <Cropper
+                  image={imageUrl}
+                  crop={crop}
+                  zoom={zoom}
+                  aspect={cropSizes[selectedSize].aspect}
+                  onCropChange={setCrop}
+                  onZoomChange={setZoom}
+                  onCropComplete={onCropComplete}
+                />
+              </div>
+
+              <div className="slider-container">
+                <label htmlFor="zoom">Zoom:</label>
+                <input
+                  id="zoom"
+                  type="range"
+                  min={1}
+                  max={3}
+                  step={0.01}
+                  value={zoom}
+                  onChange={(e) => setZoom(Number(e.target.value))}
+                />
+              </div>
+            </>
+          )}
+
           <button type="submit" disabled={!selectedFile || loading}>
             {loading ? 'Processing...' : 'Process Photo'}
           </button>
@@ -69,22 +136,9 @@ function App() {
 
         <div className="image-preview">
           <div className="image-container">
-            <h2>Original Image</h2>
-            {selectedFile && (
-              <img 
-                src={URL.createObjectURL(selectedFile)} 
-                alt="Original upload" 
-              />
-            )}
-          </div>
-
-          <div className="image-container">
             <h2>Processed Image</h2>
             {processedImage && (
-              <img 
-                src={processedImage} 
-                alt="Processed result" 
-              />
+              <img src={processedImage} alt="Processed result" />
             )}
           </div>
         </div>
@@ -93,4 +147,4 @@ function App() {
   );
 }
 
-export default App; 
+export default App;
