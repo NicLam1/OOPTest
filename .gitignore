@@ -54,4 +54,4 @@ backend/src/main/resources/models/
 # Node.js dependencies
 node_modules/
 
-.onnx
+models/
