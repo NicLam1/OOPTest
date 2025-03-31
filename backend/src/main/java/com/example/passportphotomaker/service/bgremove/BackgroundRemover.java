@@ -19,6 +19,14 @@ import ai.djl.translate.TranslateException;
 public abstract class BackgroundRemover {
     public abstract Mat removeBackground(File inputFile) throws IOException, TranslateException;
 
+    /**
+     * Close any resources used by the background remover implementation.
+     * This method should be called when the background remover is no longer needed.
+     */
+    public void close() {
+        // Default implementation - subclasses can override if needed
+    }
+
     // Default debugMode
     protected boolean debugMode = false;
 

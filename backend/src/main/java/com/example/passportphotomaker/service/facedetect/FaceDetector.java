@@ -20,8 +20,10 @@ import org.springframework.util.FileCopyUtils;
 public class FaceDetector {
     protected boolean debugMode = false;
     private final ResourceLoader resourceLoader;
+    private CascadeClassifier faceDetector;
 
     public FaceDetector(boolean debugMode, ResourceLoader resourceLoader) {
+        this.debugMode = debugMode;
         this.resourceLoader = resourceLoader;
     }
 
@@ -50,7 +52,7 @@ public class FaceDetector {
             FileCopyUtils.copy(cascadeResource.getInputStream(), new FileOutputStream(cascadeFile));
             
             // Load the cascade
-            CascadeClassifier faceDetector = new CascadeClassifier(cascadeFile.getAbsolutePath());
+            faceDetector = new CascadeClassifier(cascadeFile.getAbsolutePath());
             cascadeFile.delete();
             
             // Convert to grayscale for face detection
@@ -113,5 +115,15 @@ public class FaceDetector {
         int width = image.width() / 4;
         int height = image.height() / 4;
         return new Rect(centerX - width/2, centerY - height/2, width, height);
+    }
+
+    /**
+     * Releases resources used by the face detector.
+     * This method should be called when the detector is no longer needed.
+     */
+    public void close() {
+        if (faceDetector != null) {
+            faceDetector.empty(); // Release native resources
+        }
     }
 }

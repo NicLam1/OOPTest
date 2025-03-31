@@ -29,7 +29,7 @@ public class PhotoController {
                 return ResponseEntity.badRequest().body("Please upload an image");
             }
 
-            byte[] processedImageBytes = photoService.passportifyImage(file);
+            byte[] processedImageBytes = photoService.processImage(file);
             
             return ResponseEntity.ok()
                     .contentType(MediaType.IMAGE_PNG)

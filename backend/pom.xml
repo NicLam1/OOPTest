@@ -19,7 +19,7 @@
         <opencv.version>4.9.0-0</opencv.version>
         <tensorflow.version>0.5.0</tensorflow.version>
         <commons-io.version>2.11.0</commons-io.version>
-        <ai.djl.version>0.22.1</ai.djl.version>
+        <ai.djl.version>0.32.0</ai.djl.version>
     </properties>
     
     <dependencies>
@@ -56,12 +56,28 @@
             <groupId>ai.djl.pytorch</groupId>
             <artifactId>pytorch-engine</artifactId>
             <version>${ai.djl.version}</version>
+            <scope>runtime</scope>
         </dependency>
         
         <dependency>
             <groupId>ai.djl.pytorch</groupId>
             <artifactId>pytorch-model-zoo</artifactId>
             <version>${ai.djl.version}</version>
+        </dependency>
+        
+        <!-- Add ONNX Runtime dependency for ONNX models -->
+        <dependency>
+            <groupId>ai.djl.onnxruntime</groupId>
+            <artifactId>onnxruntime-engine</artifactId>
+            <version>${ai.djl.version}</version>
+            <scope>runtime</scope>
+        </dependency>
+        
+        <!-- Add direct ONNX Runtime dependency -->
+        <dependency>
+            <groupId>com.microsoft.onnxruntime</groupId>
+            <artifactId>onnxruntime</artifactId>
+            <version>1.21.0</version>
         </dependency>
         
         <dependency>

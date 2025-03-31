@@ -94,4 +94,13 @@ public class ImageCropper {
         
         return croppedImage;
     }
+
+    /**
+     * Releases resources used by the image cropper.
+     * This method should be called when the cropper is no longer needed.
+     */
+    public void close() {
+        // Currently no resources to release, but implementing for consistency
+        // and future additions
+    }
 }
