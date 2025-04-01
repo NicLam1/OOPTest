@@ -224,8 +224,8 @@ public class PhotoService {
         }
     }
 
-    public byte[] processImage(MultipartFile file) throws IOException {
-        // Validate input file
+    public byte[] processImage(MultipartFile file, String format) throws IOException {
+        // Validate input file (this part stays the same)
         validateInputFile(file);
         
         // Create temporary file for processing
@@ -242,28 +242,31 @@ public class PhotoService {
                 throw new IOException("Background removal failed to produce a valid image");
             }
             
-            // Add Border
+            // Add Border (this remains the same)
             borderedImage = addBorder(processedImage, borderWidth);
             if (borderedImage == null || borderedImage.empty()) {
                 throw new IOException("Failed to add border to image");
             }
             // END OF IMAGE PROCESSING -----------------------------------
-
+    
+            // Choose the extension based on the requested format
+            String extension = format.equalsIgnoreCase("jpeg") || format.equalsIgnoreCase("jpg") ? ".jpg" : ".png";
+            
             // Save to temporary output file
-            outputFile = File.createTempFile("processed-", ".png");
+            outputFile = File.createTempFile("processed-", extension);
             boolean writeSuccess = Imgcodecs.imwrite(outputFile.getAbsolutePath(), borderedImage);
             
             if (!writeSuccess) {
                 throw new IOException("Failed to write output image to disk");
             }
             
-            // Read as bytes
+            // Read the saved image as bytes
             byte[] resultBytes = Files.readAllBytes(outputFile.toPath());
             
             if (resultBytes == null || resultBytes.length == 0) {
                 throw new IOException("Failed to read output image data");
             }
-
+    
             return resultBytes;
         } catch (Exception e) {
             System.err.println("Error processing image: " + e.getMessage());
@@ -272,15 +275,14 @@ public class PhotoService {
             }
             throw new IOException("Error processing image: " + e.getMessage(), e);
         } finally {
-            // Clean up Mats
+            // Clean up Mats and temp files
             releaseMatSafely(processedImage);
             releaseMatSafely(borderedImage);
-            
-            // Clean up temp files
             deleteTempFileSafely(tempFile);
             deleteTempFileSafely(outputFile);
         }
     }
+    
 
     // Helper methods for better error handling and resource management
     private void validateInputFile(MultipartFile file) throws IOException {
@@ -329,8 +331,13 @@ public class PhotoService {
     private Mat addBorder(Mat image, int borderWidth) {
         // Add a border around the image with configurable width
         Mat result = new Mat();
+        
+        // If it's a PNG with transparency, handle it as PNG
+        // If it's a JPEG, fill the border with white (RGB: 255, 255, 255)
+        Scalar borderColor = new Scalar(255, 255, 255, 255);  // White for JPEG
+        
         Core.copyMakeBorder(image, result, borderWidth, borderWidth, borderWidth, borderWidth, 
-                           Core.BORDER_CONSTANT, new Scalar(0, 0, 0, 255));
+                           Core.BORDER_CONSTANT, borderColor);
         return result;
     }
     

@@ -2,7 +2,7 @@ package com.example.passportphotomaker.controller;
 
 import com.example.passportphotomaker.service.PhotoService;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -23,21 +23,30 @@ public class PhotoController {
     }
 
     @PostMapping("/process-photo")
-    public ResponseEntity<?> processPhoto(@RequestParam("image") MultipartFile file) {
+    public ResponseEntity<?> processPhoto(
+            @RequestParam("image") MultipartFile file,
+            @RequestParam(name = "format", defaultValue = "png") String format
+    ) {
         try {
             if (file.isEmpty()) {
                 return ResponseEntity.badRequest().body("Please upload an image");
             }
 
-            byte[] processedImageBytes = photoService.processImage(file);
-            
+            byte[] imageBytes = photoService.processImage(file, format);
+
+            // Determine the media type dynamically based on the format
+            MediaType mediaType = format.equalsIgnoreCase("jpeg") || format.equalsIgnoreCase("jpg")
+                    ? MediaType.IMAGE_JPEG
+                    : MediaType.IMAGE_PNG;
+
+            // Return processed image with correct Content-Disposition header (downloads the file)
             return ResponseEntity.ok()
-                    .contentType(MediaType.IMAGE_PNG)
-                    .body(processedImageBytes);
-                    
+                    .contentType(mediaType)
+                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=passport-photo." + format)
+                    .body(imageBytes);
+
         } catch (IOException e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body("Failed to process image: " + e.getMessage());
+            return ResponseEntity.status(500).body("Failed to process image: " + e.getMessage());
         }
     }
-} 
+}

@@ -21,6 +21,8 @@ function App() {
   const [zoom, setZoom] = useState(1);
   const [croppedAreaPixels, setCroppedAreaPixels] = useState(null);
   const [selectedSize, setSelectedSize] = useState('35x45'); // default
+  const [downloadFormat, setDownloadFormat] = useState('png');
+
 
   const handleFileChange = (event) => {
     const file = event.target.files[0];
@@ -30,6 +32,15 @@ function App() {
     setError(null);
     setZoom(1); // reset zoom
   };
+
+  const handleDownload = (url, format) => {
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `passport-photo.${format}`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };  
 
   const onCropComplete = useCallback((croppedArea, croppedAreaPixels) => {
     setCroppedAreaPixels(croppedAreaPixels);
@@ -49,6 +60,7 @@ function App() {
 
       const formData = new FormData();
       formData.append('image', croppedBlob, 'cropped.jpg');
+      formData.append('format', downloadFormat);
 
       const response = await fetch('http://localhost:8080/api/process-photo', {
         method: 'POST',
@@ -135,13 +147,35 @@ function App() {
         {error && <div className="error">{error}</div>}
 
         <div className="image-preview">
-          <div className="image-container">
-            <h2>Processed Image</h2>
+        <div className="image-container">
+          <h2>Processed Image</h2>
             {processedImage && (
-              <img src={processedImage} alt="Processed result" />
-            )}
+              <>
+              <img src={processedImage} alt="Processed result in ${downloadFormat}" style={{ maxWidth: '100%', marginBottom: '1rem' }} />
+        
+              <div className="download-section" style={{ marginTop: '1rem' }}>
+                <label htmlFor="format-select">Choose format to download:</label>
+                  <select
+                    id="format-select"
+                    value={downloadFormat}
+                    onChange={(e) => setDownloadFormat(e.target.value)}
+                    style={{ margin: '0 1rem' }}
+                  >
+                    <option value="png">PNG</option>
+                    <option value="jpeg">JPEG</option>
+                  </select>
+
+                <button
+                  type="button"
+                  onClick={() => handleDownload(processedImage, downloadFormat)}
+                >
+                Download Image
+                </button>
+              </div>
+              </>
+              )}
           </div>
-        </div>
+          </div>
       </main>
     </div>
   );
