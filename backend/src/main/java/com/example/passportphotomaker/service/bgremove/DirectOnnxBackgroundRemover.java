@@ -56,7 +56,25 @@ public class DirectOnnxBackgroundRemover extends BackgroundRemover {
      */
     public DirectOnnxBackgroundRemover(boolean debugMode) throws IOException {
         super(debugMode);
-        initOnnxRuntime();
+        try {
+            // Set system property to use a custom directory for ONNX Runtime native libraries
+            // This helps avoid permission issues with temporary directories
+            String userHome = System.getProperty("user.home");
+            File onnxDir = new File(userHome, ".onnxruntime");
+            if (!onnxDir.exists()) {
+                onnxDir.mkdirs();
+            }
+            System.setProperty("onnxruntime.native.extractiondir", onnxDir.getAbsolutePath());
+            System.out.println("Set ONNX Runtime native extraction directory to: " + onnxDir.getAbsolutePath());
+            
+            initOnnxRuntime();
+        } catch (Exception e) {
+            System.err.println("Error in DirectOnnxBackgroundRemover constructor: " + e.getMessage());
+            if (debugMode) {
+                e.printStackTrace();
+            }
+            throw new IOException("Failed to initialize ONNX Runtime: " + e.getMessage(), e);
+        }
     }
     
     /**
@@ -375,28 +393,92 @@ public class DirectOnnxBackgroundRemover extends BackgroundRemover {
      * Enhance mask using GrabCut algorithm - specifically for human subjects
      */
     private Mat refineMaskWithGrabCut(Mat image, Mat mask) {
-        // Convert mask to GrabCut format (GC_BGD, GC_FGD, GC_PR_BGD, GC_PR_FGD)
-        Mat grabCutMask = new Mat(image.size(), CvType.CV_8UC1, new Scalar(Imgproc.GC_PR_BGD));
-        
-        // Set foreground and background based on mask values
-        for (int y = 0; y < mask.rows(); y++) {
-            for (int x = 0; x < mask.cols(); x++) {
-                double[] pixel = mask.get(y, x);
-                if (pixel[0] > 200) {
-                    grabCutMask.put(y, x, Imgproc.GC_FGD); // Definite foreground for high confidence areas
-                } else if (pixel[0] > 100) {
-                    grabCutMask.put(y, x, Imgproc.GC_PR_FGD); // Probable foreground
-                } else if (pixel[0] < 30) {
-                    grabCutMask.put(y, x, Imgproc.GC_BGD); // Definite background
+        try {
+            // Convert mask to GrabCut format (GC_BGD, GC_FGD, GC_PR_BGD, GC_PR_FGD)
+            Mat grabCutMask = new Mat(image.size(), CvType.CV_8UC1, new Scalar(Imgproc.GC_PR_BGD));
+            
+            // Create counts to ensure we have both foreground and background samples
+            int fgdCount = 0;
+            int bgdCount = 0;
+            
+            // Set foreground and background based on mask values
+            for (int y = 0; y < mask.rows(); y++) {
+                for (int x = 0; x < mask.cols(); x++) {
+                    double[] pixel = mask.get(y, x);
+                    if (pixel[0] > 200) {
+                        grabCutMask.put(y, x, Imgproc.GC_FGD); // Definite foreground for high confidence areas
+                        fgdCount++;
+                    } else if (pixel[0] > 100) {
+                        grabCutMask.put(y, x, Imgproc.GC_PR_FGD); // Probable foreground
+                        fgdCount++;
+                    } else if (pixel[0] < 30) {
+                        grabCutMask.put(y, x, Imgproc.GC_BGD); // Definite background
+                        bgdCount++;
+                    }
                 }
             }
-        }
-        
-        // Apply GrabCut for better segmentation
-        Mat bgModel = new Mat();
-        Mat fgModel = new Mat();
-        
-        try {
+            
+            // Check if we have both foreground and background samples
+            if (fgdCount == 0 || bgdCount == 0) {
+                System.out.println("GrabCut skipped: Not enough foreground (" + fgdCount + 
+                                 ") or background (" + bgdCount + ") samples");
+                
+                // Force some samples if needed to avoid the error
+                if (fgdCount == 0) {
+                    // Add foreground samples in the center
+                    int centerX = image.width() / 2;
+                    int centerY = image.height() / 2;
+                    int size = Math.min(50, Math.min(image.width(), image.height()) / 4);
+                    
+                    for (int y = centerY - size; y < centerY + size; y++) {
+                        for (int x = centerX - size; x < centerX + size; x++) {
+                            if (y >= 0 && y < image.height() && x >= 0 && x < image.width()) {
+                                grabCutMask.put(y, x, Imgproc.GC_FGD);
+                            }
+                        }
+                    }
+                    System.out.println("Added forced foreground samples in center");
+                }
+                
+                if (bgdCount == 0) {
+                    // Add background samples around the edges
+                    int border = 10;
+                    
+                    // Top and bottom rows
+                    for (int x = 0; x < image.width(); x++) {
+                        for (int y = 0; y < border; y++) {
+                            if (y < image.height()) {
+                                grabCutMask.put(y, x, Imgproc.GC_BGD);
+                            }
+                        }
+                        for (int y = image.height() - border; y < image.height(); y++) {
+                            if (y >= 0) {
+                                grabCutMask.put(y, x, Imgproc.GC_BGD);
+                            }
+                        }
+                    }
+                    
+                    // Left and right columns
+                    for (int y = 0; y < image.height(); y++) {
+                        for (int x = 0; x < border; x++) {
+                            if (x < image.width()) {
+                                grabCutMask.put(y, x, Imgproc.GC_BGD);
+                            }
+                        }
+                        for (int x = image.width() - border; x < image.width(); x++) {
+                            if (x >= 0) {
+                                grabCutMask.put(y, x, Imgproc.GC_BGD);
+                            }
+                        }
+                    }
+                    System.out.println("Added forced background samples at edges");
+                }
+            }
+            
+            // Apply GrabCut for better segmentation
+            Mat bgModel = new Mat();
+            Mat fgModel = new Mat();
+            
             // For portrait photos, we can make assumptions about the subject position
             // Usually in the center of the frame
             int centerX = image.width() / 2;
@@ -413,31 +495,35 @@ public class DirectOnnxBackgroundRemover extends BackgroundRemover {
             
             // Run GrabCut algorithm
             Imgproc.grabCut(image, grabCutMask, centerRect, bgModel, fgModel, 3, Imgproc.GC_INIT_WITH_MASK);
+            System.out.println("GrabCut completed successfully");
+            
+            // Create final mask
+            Mat foreground = new Mat();
+            Mat probForeground = new Mat();
+            Core.compare(grabCutMask, new Scalar(Imgproc.GC_FGD), foreground, Core.CMP_EQ);
+            Core.compare(grabCutMask, new Scalar(Imgproc.GC_PR_FGD), probForeground, Core.CMP_EQ);
+            
+            // Combine definite and probable foreground
+            Mat finalMask = new Mat();
+            Core.bitwise_or(foreground, probForeground, finalMask);
+            
+            // Convert to 8-bit
+            finalMask.convertTo(finalMask, CvType.CV_8UC1, 255);
+            
+            // Clean up
+            grabCutMask.release();
+            bgModel.release();
+            fgModel.release();
+            foreground.release();
+            probForeground.release();
+            
+            return finalMask;
         } catch (Exception e) {
             System.err.println("GrabCut error: " + e.getMessage());
+            // If GrabCut fails, just return the original mask
+            System.out.println("Returning original mask due to GrabCut failure");
+            return mask.clone();
         }
-        
-        // Create final mask
-        Mat foreground = new Mat();
-        Mat probForeground = new Mat();
-        Core.compare(grabCutMask, new Scalar(Imgproc.GC_FGD), foreground, Core.CMP_EQ);
-        Core.compare(grabCutMask, new Scalar(Imgproc.GC_PR_FGD), probForeground, Core.CMP_EQ);
-        
-        // Combine definite and probable foreground
-        Mat finalMask = new Mat();
-        Core.bitwise_or(foreground, probForeground, finalMask);
-        
-        // Convert to 8-bit
-        finalMask.convertTo(finalMask, CvType.CV_8UC1, 255);
-        
-        // Clean up
-        grabCutMask.release();
-        bgModel.release();
-        fgModel.release();
-        foreground.release();
-        probForeground.release();
-        
-        return finalMask;
     }
     
     /**
