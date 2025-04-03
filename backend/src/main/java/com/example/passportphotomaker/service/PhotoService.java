@@ -111,8 +111,33 @@ public class PhotoService {
             }
         } else if ("onnx".equalsIgnoreCase(backgroundRemovalMethod)) {
             try {
+                // Set system properties explicitly before initialization
+                try {
+                    String userHome = System.getProperty("user.home");
+                    File onnxDir = new File(userHome, ".onnxruntime");
+                    if (!onnxDir.exists()) {
+                        onnxDir.mkdirs();
+                    }
+                    System.setProperty("onnxruntime.native.extractiondir", onnxDir.getAbsolutePath());
+                    
+                    // Try to help with compatibility issues
+                    System.setProperty("onnxruntime.native.failonnativeerror", "false");
+                    System.setProperty("java.library.path", System.getProperty("java.library.path") + File.pathSeparator + onnxDir.getAbsolutePath());
+                } catch (Exception ex) {
+                    System.err.println("Warning: Failed to set ONNX Runtime properties: " + ex.getMessage());
+                }
+                
                 this.bgRemover = new DirectOnnxBackgroundRemover(debugMode);
                 System.out.println("Using Direct ONNX Background Remover (explicitly configured)");
+            } catch (UnsatisfiedLinkError e) {
+                System.err.println("ONNX Runtime native library failed to load: " + e.getMessage());
+                System.err.println("This is likely due to missing dependencies on your system.");
+                System.err.println("Try installing Microsoft Visual C++ Redistributable (for Windows users).");
+                if (debugMode) {
+                    e.printStackTrace();
+                }
+                this.bgRemover = new OpenCVBackgroundRemover(debugMode);
+                System.out.println("Fallback to OpenCV Background Remover due to native library error");
             } catch (Exception e) {
                 System.err.println("Failed to initialize Direct ONNX Background Remover: " + e.getMessage());
                 if (debugMode) {
@@ -136,9 +161,44 @@ public class PhotoService {
             
             if (onnxModelFile.exists()) {
                 try {
+                    // Set system properties explicitly before initialization
+                    try {
+                        String userHome = System.getProperty("user.home");
+                        File onnxDir = new File(userHome, ".onnxruntime");
+                        if (!onnxDir.exists()) {
+                            onnxDir.mkdirs();
+                        }
+                        System.setProperty("onnxruntime.native.extractiondir", onnxDir.getAbsolutePath());
+                        
+                        // Try to help with compatibility issues
+                        System.setProperty("onnxruntime.native.failonnativeerror", "false");
+                        System.setProperty("java.library.path", System.getProperty("java.library.path") + File.pathSeparator + onnxDir.getAbsolutePath());
+                    } catch (Exception ex) {
+                        System.err.println("Warning: Failed to set ONNX Runtime properties: " + ex.getMessage());
+                    }
+                    
                     // Try direct ONNX implementation first
                     this.bgRemover = new DirectOnnxBackgroundRemover(debugMode);
                     System.out.println("Successfully switched to Direct ONNX Background Remover (recommended)");
+                } catch (UnsatisfiedLinkError e) {
+                    System.err.println("ONNX Runtime native library failed to load: " + e.getMessage());
+                    System.err.println("This is likely due to missing dependencies on your system.");
+                    System.err.println("Try installing Microsoft Visual C++ Redistributable (for Windows users).");
+                    if (debugMode) {
+                        e.printStackTrace();
+                    }
+                    
+                    // Fall back to DJL if direct ONNX fails (it might use a different runtime)
+                    try {
+                        this.bgRemover = new DJLBackgroundRemover(debugMode);
+                        System.out.println("Successfully switched to DJL Background Remover (fallback)");
+                    } catch (Exception ex) {
+                        System.err.println("Failed to initialize DJL remover: " + ex.getMessage());
+                        if (debugMode) {
+                            ex.printStackTrace();
+                        }
+                        System.out.println("Using OpenCV Background Remover (last resort)");
+                    }
                 } catch (Exception e) {
                     System.err.println("Failed to initialize Direct ONNX remover: " + e.getMessage());
                     if (debugMode) {

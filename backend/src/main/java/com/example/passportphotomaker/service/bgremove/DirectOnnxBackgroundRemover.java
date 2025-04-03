@@ -57,17 +57,20 @@ public class DirectOnnxBackgroundRemover extends BackgroundRemover {
     public DirectOnnxBackgroundRemover(boolean debugMode) throws IOException {
         super(debugMode);
         try {
-            // Set system property to use a custom directory for ONNX Runtime native libraries
-            // This helps avoid permission issues with temporary directories
-            String userHome = System.getProperty("user.home");
-            File onnxDir = new File(userHome, ".onnxruntime");
-            if (!onnxDir.exists()) {
-                onnxDir.mkdirs();
-            }
-            System.setProperty("onnxruntime.native.extractiondir", onnxDir.getAbsolutePath());
-            System.out.println("Set ONNX Runtime native extraction directory to: " + onnxDir.getAbsolutePath());
+            // Note: System properties are now set in PhotoService before creating this class
+            // This is a compatibility check for multiple OS environments
+            System.out.println("ONNX Runtime version check - java.vm.name: " + System.getProperty("java.vm.name"));
+            System.out.println("ONNX Runtime version check - os.name: " + System.getProperty("os.name"));
+            System.out.println("ONNX Runtime version check - os.arch: " + System.getProperty("os.arch"));
             
             initOnnxRuntime();
+        } catch (UnsatisfiedLinkError e) {
+            System.err.println("ONNX Runtime native library failed to load: " + e.getMessage());
+            System.err.println("This could be due to missing dependencies like the Visual C++ Redistributable on Windows.");
+            if (debugMode) {
+                e.printStackTrace();
+            }
+            throw new IOException("Failed to initialize ONNX Runtime (native library error): " + e.getMessage(), e);
         } catch (Exception e) {
             System.err.println("Error in DirectOnnxBackgroundRemover constructor: " + e.getMessage());
             if (debugMode) {
@@ -113,7 +116,11 @@ public class DirectOnnxBackgroundRemover extends BackgroundRemover {
             OrtSession.SessionOptions sessionOptions = new OrtSession.SessionOptions();
             sessionOptions.setOptimizationLevel(OrtSession.SessionOptions.OptLevel.BASIC_OPT);
             
-            // CPU is the default execution provider, no need to explicitly add it
+            // Enable memory pattern optimization
+            sessionOptions.setMemoryPatternOptimization(true);
+            
+            // CPU is the default execution provider
+            System.out.println("Using default CPU execution provider");
             
             // Create session with the model file
             session = env.createSession(modelFile.getAbsolutePath(), sessionOptions);
