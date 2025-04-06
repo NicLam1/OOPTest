@@ -37,10 +37,12 @@ function App() {
   const [selectedFile, setSelectedFile] = useState(null);
   const [imageUrl, setImageUrl] = useState(null);
   const [processedImage, setProcessedImage] = useState(null);
+  const [backgroundRemovedImage, setBackgroundRemovedImage] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [selectedSize, setSelectedSize] = useState('35x45'); // default
   const [downloadFormat, setDownloadFormat] = useState('png');
+  const [step, setStep] = useState(1); // 1: Upload & Remove BG, 2: Crop & Process
   
   // Cropping state
   const [crop, setCrop] = useState({
@@ -53,22 +55,83 @@ function App() {
   const [completedCrop, setCompletedCrop] = useState(null);
   const imgRef = useRef(null);
 
+  const calculateInitialCrop = (imageWidth, imageHeight, aspectRatio) => {
+    // Calculate crop dimensions that maintain aspect ratio
+    let cropWidth, cropHeight;
+    
+    if (imageWidth / imageHeight > aspectRatio) {
+      // Image is wider than target ratio - constrain by height
+      cropHeight = imageHeight * 0.8; // Use 80% of image height for better face framing
+      cropWidth = cropHeight * aspectRatio;
+    } else {
+      // Image is taller than target ratio - constrain by width
+      cropWidth = imageWidth * 0.8; // Use 80% of image width
+      cropHeight = cropWidth / aspectRatio;
+    }
+    
+    // Center the crop
+    const x = (imageWidth - cropWidth) / 2;
+    const y = (imageHeight - cropHeight) / 2;
+    
+    return {
+      unit: 'px',
+      width: cropWidth,
+      height: cropHeight,
+      x: x,
+      y: y
+    };
+  };
+
   const handleFileChange = (event) => {
     const file = event.target.files[0];
     setSelectedFile(file);
     setImageUrl(URL.createObjectURL(file));
     setProcessedImage(null);
+    setBackgroundRemovedImage(null);
     setError(null);
+    setStep(1);
     
-    // Reset crop when new image is selected
-    setCrop({
-      unit: '%',
-      width: 90,
-      height: 90,
-      x: 5,
-      y: 5
-    });
+    // Reset crop when new image is selected - will be properly set when image loads
+    setCrop(null);
     setCompletedCrop(null);
+  };
+
+  const handleImageLoad = (e) => {
+    const { naturalWidth, naturalHeight } = e.target;
+    const aspectRatio = cropSizes[selectedSize].width / cropSizes[selectedSize].height;
+    const initialCrop = calculateInitialCrop(naturalWidth, naturalHeight, aspectRatio);
+    setCrop(initialCrop);
+  };
+
+  const handleRemoveBackground = async () => {
+    if (!selectedFile) {
+      setError("Please select an image first.");
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const formData = new FormData();
+      formData.append('file', selectedFile);
+
+      const response = await fetch('http://localhost:8080/api/remove-background', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error(`Server responded with ${response.status}`);
+      }
+
+      const resultBlob = await response.blob();
+      const bgRemovedUrl = URL.createObjectURL(resultBlob);
+      setBackgroundRemovedImage(bgRemovedUrl);
+      setStep(2);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleDownload = (url, format) => {
@@ -100,8 +163,8 @@ function App() {
   const handleSubmit = async (event) => {
     event.preventDefault();
 
-    if (!selectedFile) {
-      setError("Please select an image first.");
+    if (!backgroundRemovedImage || !completedCrop) {
+      setError("Please complete background removal and cropping first.");
       return;
     }
 
@@ -111,26 +174,6 @@ function App() {
       // Get the cropped image data
       const canvas = document.createElement('canvas');
       const image = imgRef.current;
-      const scaleX = image.naturalWidth / image.width;
-      const scaleY = image.naturalHeight / image.height;
-      const ctx = canvas.getContext('2d');
-      
-      // Set canvas dimensions to the cropped area
-      canvas.width = completedCrop.width;
-      canvas.height = completedCrop.height;
-      
-      // Draw the cropped image
-      ctx.drawImage(
-        image,
-        completedCrop.x * scaleX,
-        completedCrop.y * scaleY,
-        completedCrop.width * scaleX,
-        completedCrop.height * scaleY,
-        0,
-        0,
-        completedCrop.width,
-        completedCrop.height
-      );
       
       // Calculate the target dimensions based on the selected format
       const { width: targetWidth, height: targetHeight } = calculatePixelDimensions(
@@ -138,40 +181,45 @@ function App() {
         cropSizes[selectedSize].height,
         cropSizes[selectedSize].unit
       );
-      
-      // Create a new canvas for the resized image
-      const resizedCanvas = document.createElement('canvas');
-      resizedCanvas.width = targetWidth;
-      resizedCanvas.height = targetHeight;
-      const resizedCtx = resizedCanvas.getContext('2d');
-      
-      // Draw the cropped image onto the resized canvas
-      resizedCtx.drawImage(canvas, 0, 0, targetWidth, targetHeight);
-      
-      // Convert resized canvas to blob
-      resizedCanvas.toBlob(async (blob) => {
-        const formData = new FormData();
-        formData.append('image', blob, selectedFile.name);
-        formData.append('format', downloadFormat);
-        
-        // Add photo size format information
-        formData.append('photoFormat', selectedSize);
-        formData.append('photoWidth', cropSizes[selectedSize].width);
-        formData.append('photoHeight', cropSizes[selectedSize].height);
-        formData.append('photoUnit', cropSizes[selectedSize].unit);
 
-        const response = await fetch('http://localhost:8080/api/process-photo', {
-          method: 'POST',
-          body: formData,
-        });
+      // Set canvas dimensions to match the target size exactly
+      canvas.width = targetWidth;
+      canvas.height = targetHeight;
+      const ctx = canvas.getContext('2d');
+      
+      // Enable image smoothing for better quality
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
 
-        if (!response.ok) {
-          throw new Error(`Server responded with ${response.status}`);
-        }
+      // Calculate scaling factors based on the actual displayed image size
+      const scaleX = image.naturalWidth / image.width;
+      const scaleY = image.naturalHeight / image.height;
 
-        const resultBlob = await response.blob();
-        setProcessedImage(URL.createObjectURL(resultBlob));
-      }, `image/${downloadFormat}`);
+      // Calculate the actual source dimensions in the original image
+      const sourceX = Math.round(completedCrop.x * scaleX);
+      const sourceY = Math.round(completedCrop.y * scaleY);
+      const sourceWidth = Math.round(completedCrop.width * scaleX);
+      const sourceHeight = Math.round(completedCrop.height * scaleY);
+
+      // Draw the cropped image directly to the target size
+      ctx.drawImage(
+        image,
+        sourceX,
+        sourceY,
+        sourceWidth,
+        sourceHeight,
+        0,
+        0,
+        targetWidth,
+        targetHeight
+      );
+
+      // Convert canvas to blob
+      const blob = await new Promise(resolve => canvas.toBlob(resolve, `image/${downloadFormat}`, 1.0));
+      
+      // Create URL for preview
+      const croppedImageUrl = URL.createObjectURL(blob);
+      setProcessedImage(croppedImageUrl);
       
     } catch (err) {
       setError(err.message);
@@ -186,98 +234,132 @@ function App() {
         <h1>Passport Photo Maker</h1>
       </header>
       <main>
-        <form onSubmit={handleSubmit}>
-          <div className="file-input">
-            <label htmlFor="image-upload">Select an image:</label>
-            <input
-              type="file"
-              id="image-upload"
-              accept="image/*"
-              onChange={handleFileChange}
-            />
+        <div className="step-indicator">
+          <div className={`step ${step === 1 ? 'active' : ''}`}>
+            <div className="step-number">Step 1</div>
+            <div className="step-title">Upload & Remove Background</div>
           </div>
+          <div className={`step ${step === 2 ? 'active' : ''}`}>
+            <div className="step-number">Step 2</div>
+            <div className="step-title">Crop & Process</div>
+          </div>
+        </div>
 
-          <div className="dropdown-container">
-            <label htmlFor="size-select">Select photo size:</label>
-            <select
-              id="size-select"
-              value={selectedSize}
-              onChange={(e) => setSelectedSize(e.target.value)}
+        <div className="file-input">
+          <label htmlFor="image-upload">Select an image:</label>
+          <input
+            type="file"
+            id="image-upload"
+            accept="image/*"
+            onChange={handleFileChange}
+          />
+        </div>
+
+        {step === 1 && imageUrl && (
+          <div className="image-preview">
+            <h3>Original Image</h3>
+            <div className="image-container">
+              <img 
+                src={imageUrl} 
+                alt="Original" 
+                style={{ maxWidth: '100%', maxHeight: '300px', objectFit: 'contain' }} 
+              />
+            </div>
+            <button 
+              onClick={handleRemoveBackground}
+              disabled={loading}
+              className="action-button"
             >
-              {Object.entries(cropSizes).map(([key, { label }]) => (
-                <option key={key} value={key}>{label}</option>
-              ))}
-            </select>
+              {loading ? 'Removing Background...' : 'Remove Background'}
+            </button>
           </div>
+        )}
 
-          {imageUrl && (
+        {step === 2 && (
+          <>
+            <div className="dropdown-container">
+              <label htmlFor="size-select">Select photo size:</label>
+              <select
+                id="size-select"
+                value={selectedSize}
+                onChange={(e) => {
+                  setSelectedSize(e.target.value);
+                  // Recalculate crop when size changes
+                  if (imgRef.current) {
+                    const { naturalWidth, naturalHeight } = imgRef.current;
+                    const newAspectRatio = cropSizes[e.target.value].width / cropSizes[e.target.value].height;
+                    const newCrop = calculateInitialCrop(naturalWidth, naturalHeight, newAspectRatio);
+                    setCrop(newCrop);
+                  }
+                }}
+              >
+                {Object.entries(cropSizes).map(([key, { label }]) => (
+                  <option key={key} value={key}>{label}</option>
+                ))}
+              </select>
+            </div>
+
             <div className="image-preview">
-              <h3>Original Image</h3>
+              <h3>Background Removed - Adjust Crop</h3>
               <ReactCrop
-                src={imageUrl}
+                src={backgroundRemovedImage}
                 crop={crop}
                 onChange={(c) => setCrop(c)}
                 onComplete={(c) => setCompletedCrop(c)}
                 aspect={cropSizes[selectedSize].width / cropSizes[selectedSize].height}
+                minWidth={200}
+                minHeight={200}
+                ruleOfThirds={true}
+                circularCrop={false}
+                keepSelection={true}
               >
                 <img 
                   ref={imgRef}
-                  src={imageUrl} 
-                  alt="Original" 
-                  style={{ maxWidth: '100%', maxHeight: '300px' }} 
+                  src={backgroundRemovedImage} 
+                  alt="Background Removed" 
+                  style={{ maxWidth: '100%', maxHeight: '500px', objectFit: 'contain' }} 
+                  onLoad={handleImageLoad}
                 />
               </ReactCrop>
               <p className="crop-instructions">
-                Drag to adjust the crop area. The face should be centered and take up about 70-80% of the height.
+                Drag to adjust the crop area. The face should be centered and take up about 70-80% of the height. The crop box maintains the correct aspect ratio for your selected photo size.
               </p>
               <p className="dimensions-info">
                 Selected format: {cropSizes[selectedSize].width}x{cropSizes[selectedSize].height} {cropSizes[selectedSize].unit} 
                 ({calculatePixelDimensions(cropSizes[selectedSize].width, cropSizes[selectedSize].height, cropSizes[selectedSize].unit).width}x
                 {calculatePixelDimensions(cropSizes[selectedSize].width, cropSizes[selectedSize].height, cropSizes[selectedSize].unit).height} pixels at {DPI} DPI)
               </p>
+              <button 
+                onClick={handleSubmit}
+                disabled={loading || !completedCrop}
+                className="action-button"
+              >
+                {loading ? 'Processing...' : 'Process Photo'}
+              </button>
             </div>
-          )}
-
-          <button 
-            type="submit" 
-            disabled={!selectedFile || loading || !completedCrop}
-          >
-            {loading ? 'Processing...' : 'Process Photo'}
-          </button>
-        </form>
+          </>
+        )}
 
         {error && <div className="error">{error}</div>}
 
-        <div className="image-preview">
-          <div className="image-container">
-            <h2>Processed Image</h2>
-            {processedImage && (
-              <>
-                <img src={processedImage} alt="Processed result" style={{ maxWidth: '100%', marginBottom: '1rem' }} />
-          
-                <div className="download-section" style={{ marginTop: '1rem' }}>
-                  <label htmlFor="format-select">Choose format to download:</label>
-                  <select
-                    id="format-select"
-                    value={downloadFormat}
-                    onChange={(e) => setDownloadFormat(e.target.value)}
-                    style={{ margin: '0 1rem' }}
-                  >
-                    <option value="png">PNG</option>
-                    <option value="jpeg">JPEG</option>
-                  </select>
-
-                  <button
-                    type="button"
-                    onClick={() => handleDownload(processedImage, downloadFormat)}
-                  >
-                    Download Image
-                  </button>
-                </div>
-              </>
-            )}
+        {processedImage && (
+          <div className="result-preview">
+            <h3>Final Result</h3>
+            <div className="image-container">
+              <img 
+                src={processedImage} 
+                alt="Processed" 
+                style={{ maxWidth: '100%', maxHeight: '300px', objectFit: 'contain' }} 
+              />
+            </div>
+            <button 
+              onClick={() => handleDownload(processedImage, downloadFormat)}
+              className="download-button"
+            >
+              Download Photo
+            </button>
           </div>
-        </div>
+        )}
       </main>
     </div>
   );
