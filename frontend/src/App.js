@@ -112,9 +112,10 @@ function App() {
     try {
       setLoading(true);
       const formData = new FormData();
-      formData.append('file', selectedFile);
+      formData.append('image', selectedFile);  // Match the @RequestParam("image") in controller
+      formData.append('format', downloadFormat || 'png');  // Add format
 
-      const response = await fetch('http://localhost:8080/api/remove-background', {
+      const response = await fetch('http://localhost:8080/api/process-photo', {
         method: 'POST',
         body: formData,
       });
@@ -278,6 +279,16 @@ function App() {
         {step === 2 && (
           <>
             <div className="dropdown-container">
+              <label htmlFor="format-select">Download Format:</label>
+              <select
+                id="format-select"
+                value={downloadFormat}
+                onChange={(e) => setDownloadFormat(e.target.value)}
+              >
+                <option value="png">PNG</option>
+                <option value="jpeg">JPEG</option>
+                <option value="jpg">JPG</option>
+              </select>
               <label htmlFor="size-select">Select photo size:</label>
               <select
                 id="size-select"
