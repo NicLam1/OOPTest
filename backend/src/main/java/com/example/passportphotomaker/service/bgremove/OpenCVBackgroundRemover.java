@@ -1,14 +1,13 @@
 package com.example.passportphotomaker.service.bgremove;
 
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.FileOutputStream;
 
 import org.opencv.core.Core;
 import org.opencv.core.CvType;
 import org.opencv.core.Mat;
-import org.opencv.core.MatOfPoint;
 import org.opencv.core.MatOfRect;
 import org.opencv.core.Point;
 import org.opencv.core.Rect;
@@ -17,9 +16,6 @@ import org.opencv.core.Size;
 import org.opencv.imgcodecs.Imgcodecs;
 import org.opencv.imgproc.Imgproc;
 import org.opencv.objdetect.CascadeClassifier;
-
-import java.util.ArrayList;
-import java.util.List;
 
 public class OpenCVBackgroundRemover extends BackgroundRemover {
     // Path to face detection cascade classifier
@@ -302,19 +298,31 @@ public class OpenCVBackgroundRemover extends BackgroundRemover {
         // Prepare GrabCut mask
         Mat grabCutMask = new Mat(image.size(), CvType.CV_8UC1, new Scalar(Imgproc.GC_PR_BGD));
         
-        // Set probable foreground from our masks
+        // Initialize counters for foreground and background samples
+        int fgdCount = 0;
+        int bgdCount = 0;
+        
+        // Set probable foreground from our masks with more aggressive thresholds
         for (int y = 0; y < initialMask.rows(); y++) {
             for (int x = 0; x < initialMask.cols(); x++) {
-                if (initialMask.get(y, x)[0] > 200) {
+                double[] pixel = initialMask.get(y, x);
+                if (pixel[0] > 180) {
+                    grabCutMask.put(y, x, Imgproc.GC_FGD);
+                    fgdCount++;
+                } else if (pixel[0] > 120) {
                     grabCutMask.put(y, x, Imgproc.GC_PR_FGD);
+                    fgdCount++;
+                } else if (pixel[0] < 50) {
+                    grabCutMask.put(y, x, Imgproc.GC_BGD);
+                    bgdCount++;
                 }
             }
         }
         
-        // If we have a face rect, assume body extends below
+        // If we have a face rect, assume body extends below with wider area
         if (faceRect != null) {
-            int bodyWidth = (int)(faceRect.width * 3.0);  // Body wider than face
-            int bodyHeight = (int)(faceRect.height * 4.0); // Body taller than face
+            int bodyWidth = (int)(faceRect.width * 3.5);  // Increased body width
+            int bodyHeight = (int)(faceRect.height * 4.5); // Increased body height
             
             // Calculate body rectangle - centered horizontally with face, extending down
             Rect bodyRect = new Rect(
@@ -330,30 +338,47 @@ public class OpenCVBackgroundRemover extends BackgroundRemover {
             bodyRect.width = Math.min(image.width() - bodyRect.x, bodyRect.width);
             bodyRect.height = Math.min(image.height() - bodyRect.y, bodyRect.height);
             
-            // Mark body area as probable foreground
+            // Mark body area as probable foreground with higher confidence
             for (int y = bodyRect.y; y < bodyRect.y + bodyRect.height; y++) {
                 for (int x = bodyRect.x; x < bodyRect.x + bodyRect.width; x++) {
                     if (y >= 0 && y < grabCutMask.rows() && x >= 0 && x < grabCutMask.cols()) {
-                        grabCutMask.put(y, x, Imgproc.GC_PR_FGD);
+                        // Check if it's not already definite foreground
+                        if (grabCutMask.get(y, x)[0] != Imgproc.GC_FGD) {
+                            grabCutMask.put(y, x, Imgproc.GC_PR_FGD);
+                            fgdCount++;
+                        }
                     }
                 }
             }
             
-            // Use expanded rect for GrabCut
+            // Mark outer areas as definite background to help with segmentation
+            int margin = 10;
+            for (int y = 0; y < grabCutMask.rows(); y++) {
+                for (int x = 0; x < margin; x++) {
+                    grabCutMask.put(y, x, Imgproc.GC_BGD);
+                    bgdCount++;
+                }
+                for (int x = grabCutMask.cols() - margin; x < grabCutMask.cols(); x++) {
+                    grabCutMask.put(y, x, Imgproc.GC_BGD);
+                    bgdCount++;
+                }
+            }
+            
+            // Use expanded rect for GrabCut with more padding
             Rect expandedRect = new Rect(
-                Math.max(0, faceRect.x - faceRect.width), 
+                Math.max(0, faceRect.x - faceRect.width * 2), 
                 Math.max(0, faceRect.y - faceRect.height), 
-                Math.min(image.width() - Math.max(0, faceRect.x - faceRect.width), faceRect.width * 3),
-                Math.min(image.height() - Math.max(0, faceRect.y - faceRect.height), faceRect.height * 5)
+                Math.min(image.width() - Math.max(0, faceRect.x - faceRect.width * 2), faceRect.width * 5),
+                Math.min(image.height() - Math.max(0, faceRect.y - faceRect.height), faceRect.height * 6)
             );
             
             faceRect = expandedRect;
         } else {
-            // If no face detected, use center of image with a conservative estimate for human size
+            // If no face detected, use center of image with a larger estimate for human size
             int centerX = image.width() / 2;
             int centerY = image.height() / 2;
-            int centerWidth = image.width() / 2;  // Half image width
-            int centerHeight = (int)(image.height() * 0.7); // 70% of image height
+            int centerWidth = (int)(image.width() * 0.6);  // 60% of image width
+            int centerHeight = (int)(image.height() * 0.8); // 80% of image height
             
             Rect centerRect = new Rect(
                 centerX - centerWidth/2,
@@ -365,28 +390,51 @@ public class OpenCVBackgroundRemover extends BackgroundRemover {
             for (int y = centerRect.y; y < centerRect.y + centerRect.height; y++) {
                 for (int x = centerRect.x; x < centerRect.x + centerRect.width; x++) {
                     if (y >= 0 && y < grabCutMask.rows() && x >= 0 && x < grabCutMask.cols()) {
-                        grabCutMask.put(y, x, Imgproc.GC_PR_FGD);
+                        if (grabCutMask.get(y, x)[0] != Imgproc.GC_FGD) {
+                            grabCutMask.put(y, x, Imgproc.GC_PR_FGD);
+                            fgdCount++;
+                        }
                     }
                 }
             }
         }
         
-        // Apply GrabCut
+        // Ensure we have enough samples
+        if (fgdCount < 100 || bgdCount < 100) {
+            System.out.println("Warning: Not enough samples for GrabCut. FG: " + fgdCount + ", BG: " + bgdCount);
+            // Add more background samples from the edges if needed
+            if (bgdCount < 100) {
+                int margin = 20;
+                for (int y = 0; y < grabCutMask.rows() && bgdCount < 100; y++) {
+                    for (int x = 0; x < margin; x++) {
+                        if (grabCutMask.get(y, x)[0] != Imgproc.GC_BGD) {
+                            grabCutMask.put(y, x, Imgproc.GC_BGD);
+                            bgdCount++;
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Apply GrabCut with more iterations for better results
         Mat bgModel = new Mat();
         Mat fgModel = new Mat();
         
         try {
             // If we have a face rect, use it to init the algorithm
             if (faceRect != null) {
-                Imgproc.grabCut(image, grabCutMask, faceRect, bgModel, fgModel, 5, Imgproc.GC_INIT_WITH_MASK);
+                Imgproc.grabCut(image, grabCutMask, faceRect, bgModel, fgModel, 8, Imgproc.GC_INIT_WITH_MASK);
             } else {
-                Imgproc.grabCut(image, grabCutMask, new Rect(), bgModel, fgModel, 5, Imgproc.GC_INIT_WITH_MASK);
+                Imgproc.grabCut(image, grabCutMask, new Rect(), bgModel, fgModel, 8, Imgproc.GC_INIT_WITH_MASK);
             }
         } catch (Exception e) {
             System.err.println("GrabCut error: " + e.getMessage());
+            if (debugMode) {
+                e.printStackTrace();
+            }
         }
         
-        // Get foreground mask with a more lenient approach to include more of the body
+        // Get foreground mask with a more lenient approach
         Mat foreground = new Mat();
         Mat probForeground = new Mat();
         Core.compare(grabCutMask, new Scalar(Imgproc.GC_FGD), foreground, Core.CMP_EQ);
@@ -400,7 +448,7 @@ public class OpenCVBackgroundRemover extends BackgroundRemover {
         finalMask.convertTo(finalMask, CvType.CV_8UC1, 255);
         
         // Apply closing to connect disconnected body parts
-        Mat kernel = Imgproc.getStructuringElement(Imgproc.MORPH_ELLIPSE, new Size(7, 7));
+        Mat kernel = Imgproc.getStructuringElement(Imgproc.MORPH_ELLIPSE, new Size(9, 9));
         Imgproc.morphologyEx(finalMask, finalMask, Imgproc.MORPH_CLOSE, kernel, new Point(-1, -1), 3);
         
         // Clean up resources
@@ -536,42 +584,54 @@ public class OpenCVBackgroundRemover extends BackgroundRemover {
         // Create empty mask
         Mat clothingMask = new Mat(lab.size(), CvType.CV_8UC1, new Scalar(0));
         
-        // Detect general clothing colors (conservative approach)
+        // Detect general clothing colors with improved ranges
         // Dark clothing (black, navy, etc.)
         Mat darkClothing = new Mat();
-        Core.inRange(lab, new Scalar(0, 0, 0), new Scalar(50, 127, 127), darkClothing);
+        Core.inRange(lab, new Scalar(0, 0, 0), new Scalar(80, 135, 135), darkClothing);
         
         // Light clothing (white, beige, etc.)
         Mat lightClothing = new Mat();
-        Core.inRange(lab, new Scalar(150, 0, 0), new Scalar(255, 127, 127), lightClothing);
+        Core.inRange(lab, new Scalar(130, 0, 0), new Scalar(255, 140, 140), lightClothing);
+        
+        // Blue clothing (specific for light blue shirts)
+        Mat blueClothing = new Mat();
+        Core.inRange(lab, new Scalar(100, 120, 130), new Scalar(200, 140, 150), blueClothing);
         
         // Colored clothing (using wider thresholds)
         Mat coloredClothing = new Mat();
-        Core.inRange(lab, new Scalar(20, 130, 130), new Scalar(230, 230, 230), coloredClothing);
+        Core.inRange(lab, new Scalar(20, 110, 110), new Scalar(230, 250, 250), coloredClothing);
         
         // Combine all clothing detections
         Core.bitwise_or(darkClothing, lightClothing, clothingMask);
+        Core.bitwise_or(clothingMask, blueClothing, clothingMask);
         Core.bitwise_or(clothingMask, coloredClothing, clothingMask);
         
         // Intensity-based detection (helps with complex textures)
         Mat grayImage = new Mat();
         Imgproc.cvtColor(originalImage, grayImage, Imgproc.COLOR_BGR2GRAY);
         
-        // Use adaptive thresholding to find clothing regions
+        // Use adaptive thresholding with improved parameters
         Mat adaptiveThresh = new Mat();
-        Imgproc.adaptiveThreshold(grayImage, adaptiveThresh, 255, Imgproc.ADAPTIVE_THRESH_GAUSSIAN_C, 
-                                Imgproc.THRESH_BINARY, 11, 2);
+        Imgproc.adaptiveThreshold(grayImage, adaptiveThresh, 255, 
+            Imgproc.ADAPTIVE_THRESH_GAUSSIAN_C, 
+            Imgproc.THRESH_BINARY, 15, 5);
         
         // Combine with color-based detection
         Core.bitwise_or(clothingMask, adaptiveThresh, clothingMask);
         
-        // Clean up with morphological operations
-        Mat kernel = Imgproc.getStructuringElement(Imgproc.MORPH_ELLIPSE, new Size(5, 5));
+        // Enhanced morphological operations
+        Mat kernel = Imgproc.getStructuringElement(Imgproc.MORPH_ELLIPSE, new Size(7, 7));
+        
+        // Close operation to fill gaps
         Imgproc.morphologyEx(clothingMask, clothingMask, Imgproc.MORPH_CLOSE, kernel);
+        
+        // Dilate to ensure better coverage
+        Imgproc.dilate(clothingMask, clothingMask, kernel, new Point(-1, -1), 2);
         
         // Clean up resources
         darkClothing.release();
         lightClothing.release();
+        blueClothing.release();
         coloredClothing.release();
         grayImage.release();
         adaptiveThresh.release();
