@@ -18,6 +18,7 @@ import org.springframework.core.io.ResourceLoader;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
+import com.example.passportphotomaker.service.bgchange.BackgroundChanger;
 import com.example.passportphotomaker.service.bgremove.BackgroundRemover;
 import com.example.passportphotomaker.service.bgremove.DJLBackgroundRemover;
 import com.example.passportphotomaker.service.bgremove.DirectOnnxBackgroundRemover;
@@ -30,6 +31,7 @@ public class PhotoService {
     private final ResourceLoader resourceLoader;
     private FaceDetector faceDetector;
     private BackgroundRemover bgRemover;
+    private BackgroundChanger bgChanger;
 
     @Value("${debug.mode:false}")
     private boolean debugMode;
@@ -339,6 +341,22 @@ public class PhotoService {
         int pixelWidth = (int) Math.round(width * dpi / unitToInch);
         int pixelHeight = (int) Math.round(height * dpi / unitToInch);
         return new int[] { pixelWidth, pixelHeight };
+    }
+
+    // public byte[] BackgroundChanger(byte[] transparentImg, String colour) throws IOException {
+    //     Color hex_colour = Color.decode(colour);
+    //     byte[] resultsBytes = bgChanger.addSolidColorBackground(transparentImg, hex_colour);
+    //     return resultsBytes;
+    // }
+
+    // public byte[] BackgroundChanger(byte[] transparentImg, MultipartFile background) throws IOException {
+    //     byte[] resultsBytes = bgChanger.addBackgroundImg(transparentImg, background);
+    //     return resultsBytes;
+    // }
+
+    public byte[] BackgroundChanger(byte[] transparentImg, String background) throws IOException {
+        byte[] resultsBytes = bgChanger.addBackgroundImg(transparentImg, background);
+        return resultsBytes;
     }
 
     /**
