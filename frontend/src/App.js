@@ -1,7 +1,14 @@
 import React, { useState, useRef } from 'react';
 import ReactCrop from 'react-image-crop';
 import 'react-image-crop/dist/ReactCrop.css';
-import './App.css';
+import { 
+  ArrowUpTrayIcon, 
+  PhotoIcon,
+  CheckCircleIcon,
+  ArrowPathIcon,
+  ScissorsIcon,
+  DocumentArrowDownIcon
+} from '@heroicons/react/24/outline';
 
 const cropSizes = {
   '2x2': { 
@@ -230,148 +237,288 @@ function App() {
   };
 
   return (
-    <div className="App">
-      <header className="App-header">
-        <h1>Passport Photo Maker</h1>
+    <div className="min-h-screen bg-gray-50">
+      <header className="bg-white shadow">
+        <div className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
+          <h1 className="text-3xl font-bold text-gray-900 flex items-center">
+            <PhotoIcon className="h-8 w-8 mr-2 text-primary-600" />
+            Passport Photo Maker
+          </h1>
+        </div>
       </header>
-      <main>
-        <div className="step-indicator">
-          <div className={`step ${step === 1 ? 'active' : ''}`}>
-            <div className="step-number">Step 1</div>
-            <div className="step-title">Upload & Remove Background</div>
-          </div>
-          <div className={`step ${step === 2 ? 'active' : ''}`}>
-            <div className="step-number">Step 2</div>
-            <div className="step-title">Crop & Process</div>
+
+      <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+        {/* Progress Steps */}
+        <div className="px-4 sm:px-0 mb-8">
+          <div className="border-b border-gray-200">
+            <nav className="-mb-px flex" aria-label="Tabs">
+              <button
+                className={`w-1/2 py-4 px-1 text-center border-b-2 font-medium text-sm ${
+                  step === 1
+                    ? 'border-primary-500 text-primary-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+                onClick={() => step > 1 && setStep(1)}
+              >
+                <div className="flex justify-center items-center">
+                  <span className="bg-gray-100 rounded-full h-6 w-6 flex items-center justify-center mr-2 border border-gray-300">
+                    1
+                  </span>
+                  Upload & Remove Background
+                </div>
+              </button>
+              <button
+                className={`w-1/2 py-4 px-1 text-center border-b-2 font-medium text-sm ${
+                  step === 2
+                    ? 'border-primary-500 text-primary-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+                onClick={() => backgroundRemovedImage && setStep(2)}
+                disabled={!backgroundRemovedImage}
+              >
+                <div className="flex justify-center items-center">
+                  <span className="bg-gray-100 rounded-full h-6 w-6 flex items-center justify-center mr-2 border border-gray-300">
+                    2
+                  </span>
+                  Crop & Process
+                </div>
+              </button>
+            </nav>
           </div>
         </div>
 
-        <div className="file-input">
-          <label htmlFor="image-upload">Select an image:</label>
-          <input
-            type="file"
-            id="image-upload"
-            accept="image/*"
-            onChange={handleFileChange}
-          />
-        </div>
-
-        {step === 1 && imageUrl && (
-          <div className="image-preview">
-            <h3>Original Image</h3>
-            <div className="image-container">
-              <img 
-                src={imageUrl} 
-                alt="Original" 
-                style={{ maxWidth: '100%', maxHeight: '300px', objectFit: 'contain' }} 
-              />
+        {/* Error Display */}
+        {error && (
+          <div className="rounded-md bg-red-50 p-4 mx-4 mb-6">
+            <div className="flex">
+              <div className="flex-shrink-0">
+                <svg className="h-5 w-5 text-red-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div className="ml-3">
+                <p className="text-sm font-medium text-red-800">{error}</p>
+              </div>
             </div>
-            <button 
-              onClick={handleRemoveBackground}
-              disabled={loading}
-              className="action-button"
-            >
-              {loading ? 'Removing Background...' : 'Remove Background'}
-            </button>
+          </div>
+        )}
+
+        {step === 1 && (
+          <div className="bg-white shadow overflow-hidden sm:rounded-lg">
+            <div className="px-4 py-5 sm:p-6">
+              {/* Photo Size Selection */}
+              <div className="mb-6">
+                <label htmlFor="size-select" className="block text-sm font-medium text-gray-700 mb-2">
+                  Passport Photo Size
+                </label>
+                <select
+                  id="size-select"
+                  value={selectedSize}
+                  onChange={(e) => setSelectedSize(e.target.value)}
+                  className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm rounded-md"
+                >
+                  {Object.entries(cropSizes).map(([key, size]) => (
+                    <option key={key} value={key}>
+                      {size.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* File Upload Section */}
+              <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 mt-4 text-center">
+                <div className="space-y-1 text-center">
+                  <svg
+                    className="mx-auto h-12 w-12 text-gray-400"
+                    stroke="currentColor"
+                    fill="none"
+                    viewBox="0 0 48 48"
+                    aria-hidden="true"
+                  >
+                    <path
+                      d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02"
+                      strokeWidth={2}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                  <div className="flex text-sm text-gray-600 justify-center">
+                    <label
+                      htmlFor="file-upload"
+                      className="relative cursor-pointer bg-white rounded-md font-medium text-primary-600 hover:text-primary-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-primary-500"
+                    >
+                      <span>Upload a file</span>
+                      <input
+                        id="file-upload"
+                        name="file-upload"
+                        type="file"
+                        className="sr-only"
+                        accept="image/*"
+                        onChange={handleFileChange}
+                      />
+                    </label>
+                    <p className="pl-1">or drag and drop</p>
+                  </div>
+                  <p className="text-xs text-gray-500">PNG, JPG, GIF up to 10MB</p>
+                </div>
+
+                {/* Image Preview */}
+                {imageUrl && (
+                  <div className="mt-6">
+                    <img
+                      src={imageUrl}
+                      alt="Uploaded"
+                      className="mx-auto max-h-64 rounded-lg shadow-md"
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Output Format Selection */}
+              <div className="mt-6">
+                <label htmlFor="format-select" className="block text-sm font-medium text-gray-700 mb-2">
+                  Output Format
+                </label>
+                <select
+                  id="format-select"
+                  value={downloadFormat}
+                  onChange={(e) => setDownloadFormat(e.target.value)}
+                  className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm rounded-md"
+                >
+                  <option value="png">PNG</option>
+                  <option value="jpeg">JPEG</option>
+                </select>
+              </div>
+
+              {/* Remove Background Button */}
+              <div className="mt-6">
+                <button
+                  onClick={handleRemoveBackground}
+                  disabled={!selectedFile || loading}
+                  className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white ${
+                    !selectedFile || loading
+                      ? 'bg-gray-300 cursor-not-allowed'
+                      : 'bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500'
+                  }`}
+                >
+                  {loading ? (
+                    <>
+                      <ArrowPathIcon className="animate-spin -ml-1 mr-2 h-5 w-5" />
+                      Processing...
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircleIcon className="-ml-1 mr-2 h-5 w-5" />
+                      Remove Background
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
           </div>
         )}
 
         {step === 2 && (
-          <>
-            <div className="dropdown-container">
-              <label htmlFor="format-select">Download Format:</label>
-              <select
-                id="format-select"
-                value={downloadFormat}
-                onChange={(e) => setDownloadFormat(e.target.value)}
-              >
-                <option value="png">PNG</option>
-                <option value="jpeg">JPEG</option>
-                <option value="jpg">JPG</option>
-              </select>
-              <label htmlFor="size-select">Select photo size:</label>
-              <select
-                id="size-select"
-                value={selectedSize}
-                onChange={(e) => {
-                  setSelectedSize(e.target.value);
-                  // Recalculate crop when size changes
-                  if (imgRef.current) {
-                    const { naturalWidth, naturalHeight } = imgRef.current;
-                    const newAspectRatio = cropSizes[e.target.value].width / cropSizes[e.target.value].height;
-                    const newCrop = calculateInitialCrop(naturalWidth, naturalHeight, newAspectRatio);
-                    setCrop(newCrop);
-                  }
-                }}
-              >
-                {Object.entries(cropSizes).map(([key, { label }]) => (
-                  <option key={key} value={key}>{label}</option>
-                ))}
-              </select>
-            </div>
-
-            <div className="image-preview">
-              <h3>Background Removed - Adjust Crop</h3>
-              <ReactCrop
-                src={backgroundRemovedImage}
-                crop={crop}
-                onChange={(c) => setCrop(c)}
-                onComplete={(c) => setCompletedCrop(c)}
-                aspect={cropSizes[selectedSize].width / cropSizes[selectedSize].height}
-                minWidth={200}
-                minHeight={200}
-                ruleOfThirds={true}
-                circularCrop={false}
-                keepSelection={true}
-              >
-                <img 
-                  ref={imgRef}
-                  src={backgroundRemovedImage} 
-                  alt="Background Removed" 
-                  style={{ maxWidth: '100%', maxHeight: '500px', objectFit: 'contain' }} 
-                  onLoad={handleImageLoad}
-                />
-              </ReactCrop>
-              <p className="crop-instructions">
-                Drag to adjust the crop area. The face should be centered and take up about 70-80% of the height. The crop box maintains the correct aspect ratio for your selected photo size.
+          <div className="bg-white shadow overflow-hidden sm:rounded-lg">
+            <div className="px-4 py-5 sm:p-6">
+              <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">Crop Photo</h3>
+              <p className="text-sm text-gray-500 mb-6">
+                Adjust the cropping area to ensure proper head position and size for your {cropSizes[selectedSize].label}.
               </p>
-              <p className="dimensions-info">
-                Selected format: {cropSizes[selectedSize].width}x{cropSizes[selectedSize].height} {cropSizes[selectedSize].unit} 
-                ({calculatePixelDimensions(cropSizes[selectedSize].width, cropSizes[selectedSize].height, cropSizes[selectedSize].unit).width}x
-                {calculatePixelDimensions(cropSizes[selectedSize].width, cropSizes[selectedSize].height, cropSizes[selectedSize].unit).height} pixels at {DPI} DPI)
-              </p>
-              <button 
-                onClick={handleSubmit}
-                disabled={loading || !completedCrop}
-                className="action-button"
-              >
-                {loading ? 'Processing...' : 'Process Photo'}
-              </button>
-            </div>
-          </>
-        )}
 
-        {error && <div className="error">{error}</div>}
+              {/* Crop Container */}
+              <div className="mb-6 max-w-2xl mx-auto">
+                {backgroundRemovedImage && (
+                  <ReactCrop
+                    crop={crop}
+                    onChange={(c) => setCrop(c)}
+                    onComplete={(c) => setCompletedCrop(c)}
+                    aspect={cropSizes[selectedSize].width / cropSizes[selectedSize].height}
+                    className="rounded-lg max-h-[500px] mx-auto"
+                  >
+                    <img
+                      ref={imgRef}
+                      src={backgroundRemovedImage}
+                      alt="Background Removed"
+                      onLoad={handleImageLoad}
+                      className="max-w-full max-h-[500px]"
+                    />
+                  </ReactCrop>
+                )}
+                
+                <div className="mt-2 text-sm text-gray-500">
+                  <p>
+                    Drag to move. Drag corners to resize. The person's eyes should be about 2/3 from the bottom of the photo.
+                  </p>
+                </div>
+              </div>
 
-        {processedImage && (
-          <div className="result-preview">
-            <h3>Final Result</h3>
-            <div className="image-container">
-              <img 
-                src={processedImage} 
-                alt="Processed" 
-                style={{ maxWidth: '100%', maxHeight: '300px', objectFit: 'contain' }} 
-              />
+              {/* Process Button */}
+              <div className="flex justify-center mt-4">
+                <button
+                  onClick={handleSubmit}
+                  disabled={!completedCrop || loading}
+                  className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white ${
+                    !completedCrop || loading
+                      ? 'bg-gray-300 cursor-not-allowed'
+                      : 'bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500'
+                  }`}
+                >
+                  {loading ? (
+                    <>
+                      <ArrowPathIcon className="animate-spin -ml-1 mr-2 h-5 w-5" />
+                      Processing...
+                    </>
+                  ) : (
+                    <>
+                      <ScissorsIcon className="-ml-1 mr-2 h-5 w-5" />
+                      Crop & Process
+                    </>
+                  )}
+                </button>
+              </div>
+
+              {/* Result Preview */}
+              {processedImage && (
+                <div className="mt-8 bg-gray-50 p-6 rounded-lg border border-gray-200 max-w-xl mx-auto">
+                  <h3 className="text-lg font-medium text-gray-900 mb-4">Processed Photo</h3>
+                  
+                  <div className="bg-white p-2 rounded-lg shadow-sm border border-gray-100 mb-4">
+                    <img 
+                      src={processedImage} 
+                      alt="Processed" 
+                      className="mx-auto max-h-96 rounded"
+                    />
+                  </div>
+                  
+                  <div className="text-sm text-gray-500 mb-4">
+                    <p>
+                      Final size: {cropSizes[selectedSize].width}×{cropSizes[selectedSize].height} {cropSizes[selectedSize].unit}
+                      {' at '}{DPI} DPI.
+                    </p>
+                  </div>
+                  
+                  <button
+                    onClick={() => handleDownload(processedImage, downloadFormat)}
+                    className="w-full inline-flex justify-center items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-secondary-600 hover:bg-secondary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-secondary-500"
+                  >
+                    <DocumentArrowDownIcon className="-ml-1 mr-2 h-5 w-5" />
+                    Download Photo
+                  </button>
+                </div>
+              )}
             </div>
-            <button 
-              onClick={() => handleDownload(processedImage, downloadFormat)}
-              className="download-button"
-            >
-              Download Photo
-            </button>
           </div>
         )}
       </main>
+
+      <footer className="bg-white mt-12">
+        <div className="max-w-7xl mx-auto py-4 px-4 sm:px-6 lg:px-8">
+          <p className="text-center text-sm text-gray-500">
+            Passport Photo Maker - Create professional passport photos that meet international standards
+          </p>
+        </div>
+      </footer>
     </div>
   );
 }
