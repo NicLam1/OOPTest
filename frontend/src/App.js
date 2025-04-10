@@ -60,16 +60,19 @@ function App() {
   const [contrast, setContrast] = useState(1);       // 0.5 to 3
   const [saturation, setSaturation] = useState(1);   // 0.5 to 3
   const [backgroundRemovedFile, setBackgroundRemovedFile] = useState(null);
+  const [finalAdjustedImage, setFinalAdjustedImage] = useState(null);
+
 
 
   const debouncedSendAdjustments = debounce(
-    async ({ brightness, contrast, saturation }) => {
-      if (!backgroundRemovedFile) return;
+    async ({ brightness, contrast, saturation, imageFile }) => {
+      const imageToUse = imageFile || backgroundRemovedFile;
+      if (!imageToUse) return;
   
       console.log("📤 Sending to /adjust-photo", { brightness, contrast, saturation });
-  
+
       const formData = new FormData();
-      formData.append("image", backgroundRemovedFile);
+      formData.append("image", imageToUse);
       formData.append("brightness", brightness);
       formData.append("contrast", contrast);
       formData.append("saturation", saturation);
@@ -93,6 +96,7 @@ function App() {
       console.log("Received adjusted image blob:", adjustedBlob);
       console.log("Blob size:", adjustedBlob.size, "Type:", adjustedBlob.type);
       setBackgroundChangedImage(URL.createObjectURL(adjustedBlob));
+      setFinalAdjustedImage(URL.createObjectURL(adjustedBlob));
     },
     300
   );
@@ -341,8 +345,22 @@ function App() {
   
       const resultBlob = await apiResponse.blob();
       const bgChangedUrl = URL.createObjectURL(resultBlob);
+
       setBackgroundChangedImage(bgChangedUrl);
-      setStep(3); // Move to crop step
+
+      // 👇 Call adjustment with the new image applied
+      const bgChangedFile = new File([resultBlob], "bg-changed.png", { type: resultBlob.type });
+      setBackgroundRemovedFile(bgChangedFile);
+      debouncedSendAdjustments({
+        brightness,
+        contrast,
+        saturation,
+        imageFile: bgChangedFile
+      });
+
+
+      setStep(3);
+      // Move to crop step
     } catch (err) {
       setError(err.message);
     } finally {
@@ -866,7 +884,11 @@ function App() {
                   >
                     <img
                       ref={imgRef}
-                      src={backgroundChangedImage}
+                      src={
+                        step === 3
+                          ? (finalAdjustedImage ?? backgroundChangedImage)
+                          : backgroundChangedImage
+                      }
                       alt="Background Removed"
                       onLoad={handleImageLoad}
                       className="max-w-full max-h-[500px]"
