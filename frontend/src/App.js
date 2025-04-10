@@ -770,7 +770,8 @@ function App() {
                   </div>
                   
                   {/* Custom Color Picker */}
-                  <div className="flex items-center mt-3">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Cutom Color </label>
+                  <div className="flex items-center mt-3"> 
                     <input
                       type="color"
                       value={selectedBackgroundColor}
@@ -936,7 +937,7 @@ function App() {
           
 
                 <div className="mb-6">
-                  <h4 className="text-sm font-medium text-gray-700 mb-2">Adjustments</h4>
+                  <h4 className="text-sm font-medium text-gray-700 mb-2">Adjust original image</h4>
 
                   <div className="space-y-4">
                     <div>
