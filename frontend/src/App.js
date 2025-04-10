@@ -53,9 +53,9 @@ function App() {
   const [step, setStep] = useState(1); // 1: Upload & Remove BG, 2: Change BG, 3:Crop & Process
   const [backgroundChangedImage, setBackgroundChangedImage] = useState(null);
   const [backgroundImage, setBackgroundImage] = useState(null);
-  const [backgroundType, setBackgroundType] = useState('color'); // 'color' or 'image'
+  const [backgroundType, setBackgroundType] = useState('color'); // 'color', 'image' or 'picker'
   const [selectedBackgroundColor, setSelectedBackgroundColor] = useState('#ffffff'); // default white
-  
+  const [isPickingColor, setIsPickingColor] = useState(false);
   
   // Background colors
   const backgroundColors = [
@@ -65,7 +65,7 @@ function App() {
     { name: 'Gray', value: '#9ca3af' },
     { name: 'Black', value: '#000000' },
   ];
-  
+
   // Cropping state
   const [crop, setCrop] = useState({
     unit: '%',
@@ -156,6 +156,7 @@ function App() {
       setLoading(false);
     }
   };
+
 
   const handleDownload = (url, format) => {
     const link = document.createElement('a');
@@ -301,6 +302,36 @@ function App() {
     } finally {
       setLoading(false);
     }
+  };
+
+    // Function to handle color picking from the image
+  const handleImageColorPick = (e) => {
+    if (!isPickingColor) return;
+    
+    // Get canvas context from the image
+    const canvas = document.createElement('canvas');
+    const img = e.target;
+    canvas.width = img.naturalWidth;
+    canvas.height = img.naturalHeight;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(img, 0, 0);
+    
+    // Get the pixel data at the click position
+    const rect = img.getBoundingClientRect();
+    const x = Math.round((e.clientX - rect.left) * (img.naturalWidth / rect.width));
+    const y = Math.round((e.clientY - rect.top) * (img.naturalHeight / rect.height));
+    const pixelData = ctx.getImageData(x, y, 1, 1).data;
+    
+    // Convert to hex
+    const hex = '#' + 
+      ('0' + pixelData[0].toString(16)).slice(-2) +
+      ('0' + pixelData[1].toString(16)).slice(-2) +
+      ('0' + pixelData[2].toString(16)).slice(-2);
+    
+    // Update color and exit picking mode
+    setSelectedBackgroundColor(hex);
+    setIsPickingColor(false);
+    setBackgroundType('color'); // Switch back to color mode with the picked color
   };
 
 
@@ -548,7 +579,10 @@ function App() {
                       name="background-type"
                       type="radio"
                       checked={backgroundType === 'color'}
-                      onChange={() => setBackgroundType('color')}
+                      onChange={() => {
+                        setBackgroundType('color');
+                        setIsPickingColor(false);
+                      }}
                       className="focus:ring-primary-500 h-4 w-4 text-primary-600 border-gray-300"
                     />
                     <label htmlFor="color-type" className="ml-2 block text-sm font-medium text-gray-700">
@@ -561,7 +595,10 @@ function App() {
                       name="background-type"
                       type="radio"
                       checked={backgroundType === 'image'}
-                      onChange={() => setBackgroundType('image')}
+                      onChange={() => {
+                        setBackgroundType('image');
+                        setIsPickingColor(false);
+                      }}
                       className="focus:ring-primary-500 h-4 w-4 text-primary-600 border-gray-300"
                     />
                     <label htmlFor="image-type" className="ml-2 block text-sm font-medium text-gray-700">
@@ -572,88 +609,113 @@ function App() {
               </div>
 
               {backgroundType === 'color' ? (
-                <div className="mb-6">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Select Color</label>
-                  
-                  {/* Color Presets */}
-                  <div className="flex flex-wrap gap-2 mb-3">
-                    {backgroundColors.map(color => (
-                      <button
-                        key={color.value}
-                        type="button"
-                        onClick={() => setSelectedBackgroundColor(color.value)}
-                        className={`h-8 w-8 rounded-full focus:outline-none ${
-                          selectedBackgroundColor === color.value ? 'ring-2 ring-offset-2 ring-primary-500' : ''
-                        }`}
-                        style={{ backgroundColor: color.value }}
-                        title={color.name}
-                      ></button>
-                    ))}
-                  </div>
-                  
-                  {/* Custom Color Picker */}
-                  <div className="flex items-center mt-3">
-                    <input
-                      type="color"
-                      value={selectedBackgroundColor}
-                      onChange={(e) => setSelectedBackgroundColor(e.target.value)}
-                      className="h-8 w-8 p-0 border-0"
-                    />
-                    <span className="ml-2 text-sm text-gray-500">{selectedBackgroundColor}</span>
-                  </div>
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Select Color</label>
+                
+                {/* Color Presets */}
+                <div className="flex flex-wrap gap-2 mb-3">
+                  {backgroundColors.map(color => (
+                    <button
+                      key={color.value}
+                      type="button"
+                      onClick={() => setSelectedBackgroundColor(color.value)}
+                      className={`h-8 w-8 rounded-full focus:outline-none ${
+                        selectedBackgroundColor === color.value ? 'ring-2 ring-offset-2 ring-primary-500' : ''
+                      }`}
+                      style={{ backgroundColor: color.value }}
+                      title={color.name}
+                    ></button>
+                  ))}
                 </div>
-              ) : (
-                <div className="mb-6">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Upload Background Image</label>
-                  <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md">
-                    <div className="space-y-1 text-center">
-                      <svg
-                        className="mx-auto h-12 w-12 text-gray-400"
-                        stroke="currentColor"
-                        fill="none"
-                        viewBox="0 0 48 48"
-                        aria-hidden="true"
-                      >
-                        <path
-                          d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02"
-                          strokeWidth={2}
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
+                
+                {/* Custom Color Picker */}
+                <div className="flex items-center mt-3">
+                  <input
+                    type="color"
+                    value={selectedBackgroundColor}
+                    onChange={(e) => setSelectedBackgroundColor(e.target.value)}
+                    className="h-8 w-8 p-0 border-0"
+                  />
+                  <span className="ml-2 text-sm text-gray-500">{selectedBackgroundColor}</span>
+                </div>
+                
+                {/* Pick color from image section */}
+                <div className="mt-4 border-t border-gray-200 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => setIsPickingColor(!isPickingColor)}
+                    className="inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-md text-primary-600 bg-primary-50 hover:bg-primary-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+                  >
+                    {isPickingColor ? 'Cancel picking' : 'Pick color from image'}
+                  </button>
+                  
+                  {isPickingColor && imageUrl && (
+                    <div className="mt-3">
+                      <p className="text-sm text-gray-500 mb-2">Click on the image to select a color</p>
+                      <div className="border border-gray-300 rounded-md overflow-hidden cursor-crosshair">
+                        <img
+                          src={imageUrl}
+                          alt="Original"
+                          className="max-w-full h-auto max-h-48"
+                          onClick={handleImageColorPick}
                         />
-                      </svg>
-                      <div className="flex text-sm text-gray-600 justify-center">
-                        <label
-                          htmlFor="bg-upload"
-                          className="relative cursor-pointer bg-white rounded-md font-medium text-primary-600 hover:text-primary-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-primary-500"
-                        >
-                          <span>Upload an image</span>
-                          <input
-                            id="bg-upload"
-                            name="bg-upload"
-                            type="file"
-                            className="sr-only"
-                            accept="image/*"
-                            onChange={handleBackgroundImageChange}
-                          />
-                        </label>
                       </div>
-                      <p className="text-xs text-gray-500">PNG, JPG, GIF up to 10MB</p>
-                    </div>
-                  </div>
-                  {backgroundImage && (
-                    <div className="mt-2 text-sm text-gray-500">
-                      Selected: {backgroundImage.name}
                     </div>
                   )}
                 </div>
-              )}
+              </div>
+            ) : (
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Upload Background Image</label>
+                <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md">
+                  <div className="space-y-1 text-center">
+                    <svg
+                      className="mx-auto h-12 w-12 text-gray-400"
+                      stroke="currentColor"
+                      fill="none"
+                      viewBox="0 0 48 48"
+                      aria-hidden="true"
+                    >
+                      <path
+                        d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02"
+                        strokeWidth={2}
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                    <div className="flex text-sm text-gray-600 justify-center">
+                      <label
+                        htmlFor="bg-upload"
+                        className="relative cursor-pointer bg-white rounded-md font-medium text-primary-600 hover:text-primary-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-primary-500"
+                      >
+                        <span>Upload an image</span>
+                        <input
+                          id="bg-upload"
+                          name="bg-upload"
+                          type="file"
+                          className="sr-only"
+                          accept="image/*"
+                          onChange={handleBackgroundImageChange}
+                        />
+                      </label>
+                    </div>
+                    <p className="text-xs text-gray-500">PNG, JPG, GIF up to 10MB</p>
+                  </div>
+                </div>
+                {backgroundImage && (
+                  <div className="mt-2 text-sm text-gray-500">
+                    Selected: {backgroundImage.name}
+                  </div>
+                )}
+              </div>
+            )}
 
               <div className="mt-6">
                 <button
                   onClick={handleChangeBackground}
                   disabled={!backgroundRemovedImage || loading}
                   className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white ${
-                    !backgroundChangedImage|| loading
+                    !backgroundRemovedImage|| loading
                       ? 'bg-gray-300 cursor-not-allowed'
                       : 'bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500'
                   }`}
