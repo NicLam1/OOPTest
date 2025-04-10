@@ -25,6 +25,7 @@ import com.example.passportphotomaker.service.bgremove.DirectOnnxBackgroundRemov
 import com.example.passportphotomaker.service.bgremove.OpenCVBackgroundRemover;
 import com.example.passportphotomaker.service.facedetect.FaceDetector;
 import com.example.passportphotomaker.service.imagecrop.PassportPhotoCropper;
+import com.example.passportphotomaker.service.imageedit.ImageAdjuster;
 
 @Service
 public class PhotoService {
@@ -376,4 +377,56 @@ public class PhotoService {
             throw new IllegalArgumentException("Unsupported unit: " + unit);
         }
     }
+
+    /**
+ * Applies brightness, contrast, and saturation adjustments to an image sent from the frontend.
+ *
+ * @param file Multipart image file (with transparent background)
+ * @param brightness Brightness level (-100 to 100)
+ * @param contrast Contrast level (1.0 = no change)
+ * @param saturation Saturation level (1.0 = no change)
+ * @return The adjusted image as byte array
+ * @throws IOException If processing fails
+ */
+    public byte[] adjustImage(MultipartFile file, double brightness, double contrast, double saturation) throws IOException {
+        File tempFile = null;
+        File outputFile = null;
+        Mat image = null;
+        Mat adjusted = null;
+
+        try {
+            // Validate and upload to temp
+            validateInputFile(file);
+            tempFile = uploadToTempFile(file);
+
+            // Read with OpenCV
+            image = Imgcodecs.imread(tempFile.getAbsolutePath(), Imgcodecs.IMREAD_UNCHANGED);
+            if (image.empty()) {
+                throw new IOException("Failed to read image for adjustment");
+            }
+
+            // Apply adjustments
+            adjusted = ImageAdjuster.applyAdjustments(image, brightness, contrast, saturation);
+
+            // Save output
+            outputFile = File.createTempFile("adjusted-", ".png");
+            boolean success = Imgcodecs.imwrite(outputFile.getAbsolutePath(), adjusted);
+            if (!success) {
+                throw new IOException("Failed to save adjusted image");
+            }
+
+            return Files.readAllBytes(outputFile.toPath());
+
+        } catch (Exception e) {
+            System.err.println("Error adjusting image: " + e.getMessage());
+            if (debugMode) e.printStackTrace();
+            throw new IOException("Error adjusting image", e);
+        } finally {
+            releaseMatSafely(image);
+            releaseMatSafely(adjusted);
+            deleteTempFileSafely(tempFile);
+            deleteTempFileSafely(outputFile);
+        }
+    }
+
 }

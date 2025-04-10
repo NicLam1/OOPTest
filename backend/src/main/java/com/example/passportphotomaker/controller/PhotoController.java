@@ -90,4 +90,39 @@ public class PhotoController {
             return ResponseEntity.status(500).build();
         }
     }
+
+    @PostMapping("/adjust-photo")
+    public ResponseEntity<byte[]> adjustPhoto(
+        @RequestParam("image") MultipartFile file,
+        @RequestParam("brightness") double brightness,
+        @RequestParam("contrast") double contrast,
+        @RequestParam("saturation") double saturation,
+        @RequestParam(value = "format", defaultValue = "png") String format
+    ) {
+        System.out.println("==== /adjust-photo triggered ====");
+        System.out.println("Brightness: " + brightness);
+        System.out.println("Contrast: " + contrast);
+        System.out.println("Saturation: " + saturation);
+        System.out.println("File name: " + file.getOriginalFilename());
+        System.out.println("File size: " + file.getSize());
+        
+    try {
+        byte[] adjustedImage = photoService.adjustImage(file, brightness, contrast, saturation);
+
+        MediaType mediaType = format.equalsIgnoreCase("jpeg") || format.equalsIgnoreCase("jpg")
+                ? MediaType.IMAGE_JPEG
+                : MediaType.IMAGE_PNG;
+
+        return ResponseEntity.ok()
+                .contentType(mediaType)
+                .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=adjusted-photo." + format)
+                .body(adjustedImage);
+    } catch (IOException e) {
+        System.err.println(">>> Error adjusting image: " + e.getMessage());
+        e.printStackTrace();
+        return ResponseEntity.status(500).body(null);
+    }
+}
+
+
 }

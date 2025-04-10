@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import ReactCrop from 'react-image-crop';
-import 'react-image-crop/dist/ReactCrop.css';
+import 'react-image-crop/dist/ReactCrop.css'; 
 import { 
   ArrowUpTrayIcon, 
   PhotoIcon,
@@ -10,6 +10,7 @@ import {
   DocumentArrowDownIcon,
   PaintBrushIcon
 } from '@heroicons/react/24/outline';
+import { debounce } from 'lodash'; 
 
 const cropSizes = {
   '2x2': { 
@@ -55,6 +56,47 @@ function App() {
   const [backgroundImage, setBackgroundImage] = useState(null);
   const [backgroundType, setBackgroundType] = useState('color'); // 'color' or 'image'
   const [selectedBackgroundColor, setSelectedBackgroundColor] = useState('#ffffff'); // default white
+  const [brightness, setBrightness] = useState(0);   // -100 to 100
+  const [contrast, setContrast] = useState(1);       // 0.5 to 3
+  const [saturation, setSaturation] = useState(1);   // 0.5 to 3
+  const [backgroundRemovedFile, setBackgroundRemovedFile] = useState(null);
+
+
+  const debouncedSendAdjustments = debounce(
+    async ({ brightness, contrast, saturation }) => {
+      if (!backgroundRemovedFile) return;
+  
+      console.log("📤 Sending to /adjust-photo", { brightness, contrast, saturation });
+  
+      const formData = new FormData();
+      formData.append("image", backgroundRemovedFile);
+      formData.append("brightness", brightness);
+      formData.append("contrast", contrast);
+      formData.append("saturation", saturation);
+      formData.append("format", downloadFormat);
+  
+      for (let [key, value] of formData.entries()) {
+        console.log(`${key}:`, value);
+      }
+  
+      const response = await fetch("http://localhost:8080/api/adjust-photo", {
+        method: "POST",
+        body: formData,
+      });
+  
+      if (!response.ok) {
+        console.error("Adjustment request failed:", response.status);
+        return;
+      }
+  
+      const adjustedBlob = await response.blob();
+      console.log("Received adjusted image blob:", adjustedBlob);
+      console.log("Blob size:", adjustedBlob.size, "Type:", adjustedBlob.type);
+      setBackgroundChangedImage(URL.createObjectURL(adjustedBlob));
+    },
+    300
+  );
+  
   
   
   // Background colors
@@ -147,8 +189,11 @@ function App() {
       }
 
       const resultBlob = await response.blob();
-      const bgRemovedUrl = URL.createObjectURL(resultBlob);
-      setBackgroundRemovedImage(bgRemovedUrl);
+      const file = new File([resultBlob], "transparent.png", { type: resultBlob.type });
+
+      setBackgroundRemovedImage(URL.createObjectURL(file)); // For preview
+      setBackgroundRemovedFile(file); // NEW STATE
+
       setStep(2);
     } catch (err) {
       setError(err.message);
@@ -303,7 +348,28 @@ function App() {
     }
   };
 
-
+  const handleAdjustment = (key, value) => {
+    console.log("🔧 Adjustment triggered:", key, value);
+  
+    // Build the updated values explicitly
+    const updatedBrightness = key === 'brightness' ? value : brightness;
+    const updatedContrast = key === 'contrast' ? value : contrast;
+    const updatedSaturation = key === 'saturation' ? value : saturation;
+  
+    // Update state
+    if (key === 'brightness') setBrightness(value);
+    if (key === 'contrast') setContrast(value);
+    if (key === 'saturation') setSaturation(value);
+  
+    // Call the debounced function with the *actual* updated values
+    debouncedSendAdjustments({
+      brightness: updatedBrightness,
+      contrast: updatedContrast,
+      saturation: updatedSaturation,
+    });
+  };
+  
+  
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -527,8 +593,8 @@ function App() {
                       }}
                     >
                       <img
-                        src={backgroundRemovedImage}
-                        alt="Transparent Background"
+                        src={backgroundChangedImage || backgroundRemovedImage}
+                        alt="Preview"
                         className="max-h-64 rounded"
                       />
                     </div>
@@ -647,6 +713,50 @@ function App() {
                   )}
                 </div>
               )}
+
+                <div className="mb-6">
+                  <h4 className="text-sm font-medium text-gray-700 mb-2">Adjustments</h4>
+
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm text-gray-600 mb-1">Brightness ({brightness})</label>
+                      <input
+                        type="range"
+                        min={-100}
+                        max={100}
+                        value={brightness}
+                        onChange={(e) => handleAdjustment('brightness', parseInt(e.target.value))}
+                        className="w-full"
+                      />
+                    </div>
+
+                    <div>
+                       <label className="block text-sm text-gray-600 mb-1">Contrast ({contrast.toFixed(2)})</label>
+                      <input
+                        type="range"
+                        min={0.5}
+                        max={3}
+                        step={0.05}
+                        value={contrast}
+                        onChange={(e) => handleAdjustment('contrast', parseFloat(e.target.value))}
+                        className="w-full"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm text-gray-600 mb-1">Saturation ({saturation.toFixed(2)})</label>
+                      <input
+                       type="range"
+                        min={0.5}
+                        max={3}
+                        step={0.05}
+                        value={saturation}
+                        onChange={(e) => handleAdjustment('saturation', parseFloat(e.target.value))}
+                        className="w-full"
+                      />
+                     </div>
+                    </div>
+                  </div>
 
               <div className="mt-6">
                 <button
