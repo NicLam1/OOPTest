@@ -7,7 +7,8 @@ import {
   CheckCircleIcon,
   ArrowPathIcon,
   ScissorsIcon,
-  DocumentArrowDownIcon
+  DocumentArrowDownIcon,
+  PaintBrushIcon
 } from '@heroicons/react/24/outline';
 
 const cropSizes = {
@@ -49,7 +50,21 @@ function App() {
   const [error, setError] = useState(null);
   const [selectedSize, setSelectedSize] = useState('35x45'); // default
   const [downloadFormat, setDownloadFormat] = useState('png');
-  const [step, setStep] = useState(1); // 1: Upload & Remove BG, 2: Crop & Process
+  const [step, setStep] = useState(1); // 1: Upload & Remove BG, 2: Change BG, 3:Crop & Process
+  const [backgroundChangedImage, setBackgroundChangedImage] = useState(null);
+  const [backgroundImage, setBackgroundImage] = useState(null);
+  const [backgroundType, setBackgroundType] = useState('color'); // 'color' or 'image'
+  const [selectedBackgroundColor, setSelectedBackgroundColor] = useState('#ffffff'); // default white
+  
+  
+  // Background colors
+  const backgroundColors = [
+    { name: 'White', value: '#ffffff' },
+    { name: 'Blue', value: '#0284c7' },
+    { name: 'Red', value: '#dc2626' },
+    { name: 'Gray', value: '#9ca3af' },
+    { name: 'Black', value: '#000000' },
+  ];
   
   // Cropping state
   const [crop, setCrop] = useState({
@@ -171,7 +186,7 @@ function App() {
   const handleSubmit = async (event) => {
     event.preventDefault();
 
-    if (!backgroundRemovedImage || !completedCrop) {
+    if (!backgroundChangedImage || !completedCrop) {
       setError("Please complete background removal and cropping first.");
       return;
     }
@@ -228,13 +243,67 @@ function App() {
       // Create URL for preview
       const croppedImageUrl = URL.createObjectURL(blob);
       setProcessedImage(croppedImageUrl);
-      
+
     } catch (err) {
       setError(err.message);
     } finally {
       setLoading(false);
     }
   };
+
+  const handleBackgroundImageChange = (event) => {
+    const file = event.target.files[0];
+    if (file) {
+      setBackgroundImage(file);
+      setBackgroundType('image');
+    }
+  };
+  
+  const handleChangeBackground = async () => {
+    if (!backgroundRemovedImage) {
+      setError("Please complete background removal first.");
+      return;
+    }
+  
+    try {
+      setLoading(true);
+      
+      // Get the image as a blob
+      const response = await fetch(backgroundRemovedImage);
+      const imageBlob = await response.blob();
+      
+      const formData = new FormData();
+      formData.append('image', imageBlob, 'transparent-image.png');
+      formData.append('format', downloadFormat || 'png');
+      
+      // Add either background color or image based on selected type
+      if (backgroundType === 'color') {
+        formData.append('backgroundColor', selectedBackgroundColor);
+      } else if (backgroundType === 'image' && backgroundImage) {
+        formData.append('backgroundImg', backgroundImage);
+      }
+  
+      const apiResponse = await fetch('http://localhost:8080/api/process-photo', {
+        method: 'POST',
+        body: formData,
+      });
+  
+      if (!apiResponse.ok) {
+        throw new Error(`Server responded with ${apiResponse.status}`);
+      }
+  
+      const resultBlob = await apiResponse.blob();
+      const bgChangedUrl = URL.createObjectURL(resultBlob);
+      setBackgroundChangedImage(bgChangedUrl);
+      setStep(3); // Move to crop step
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -253,7 +322,7 @@ function App() {
           <div className="border-b border-gray-200">
             <nav className="-mb-px flex" aria-label="Tabs">
               <button
-                className={`w-1/2 py-4 px-1 text-center border-b-2 font-medium text-sm ${
+                className={`w-1/3 py-4 px-1 text-center border-b-2 font-medium text-sm ${
                   step === 1
                     ? 'border-primary-500 text-primary-600'
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
@@ -268,7 +337,7 @@ function App() {
                 </div>
               </button>
               <button
-                className={`w-1/2 py-4 px-1 text-center border-b-2 font-medium text-sm ${
+                className={`w-1/3 py-4 px-1 text-center border-b-2 font-medium text-sm ${
                   step === 2
                     ? 'border-primary-500 text-primary-600'
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
@@ -279,6 +348,22 @@ function App() {
                 <div className="flex justify-center items-center">
                   <span className="bg-gray-100 rounded-full h-6 w-6 flex items-center justify-center mr-2 border border-gray-300">
                     2
+                  </span>
+                  Change Background
+                </div>
+              </button>
+              <button
+                className={`w-1/3 py-4 px-1 text-center border-b-2 font-medium text-sm ${
+                  step === 3
+                    ? 'border-primary-500 text-primary-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+                onClick={() => backgroundChangedImage && setStep(3)}
+                disabled={!backgroundChangedImage}
+              >
+                <div className="flex justify-center items-center">
+                  <span className="bg-gray-100 rounded-full h-6 w-6 flex items-center justify-center mr-2 border border-gray-300">
+                    3
                   </span>
                   Crop & Process
                 </div>
@@ -421,6 +506,178 @@ function App() {
         {step === 2 && (
           <div className="bg-white shadow overflow-hidden sm:rounded-lg">
             <div className="px-4 py-5 sm:p-6">
+              <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">Change Background</h3>
+              <p className="text-sm text-gray-500 mb-6">
+                Choose a background color or upload an image to use as the background.
+              </p>
+
+              {/* Background Preview */}
+              <div className="mb-6">
+                <h4 className="text-sm font-medium text-gray-700 mb-2">Preview</h4>
+                <div className="bg-gray-100 border border-gray-200 rounded-lg p-4 flex justify-center items-center">
+                  {backgroundRemovedImage ? (
+                    <div 
+                      className="relative p-2 rounded-md"
+                      style={{
+                        backgroundColor: backgroundType === 'color' ? selectedBackgroundColor : 'transparent',
+                        backgroundImage: backgroundType === 'image' && backgroundImage ? 
+                          `url(${URL.createObjectURL(backgroundImage)})` : 'none',
+                        backgroundSize: 'cover',
+                        backgroundPosition: 'center'
+                      }}
+                    >
+                      <img
+                        src={backgroundRemovedImage}
+                        alt="Transparent Background"
+                        className="max-h-64 rounded"
+                      />
+                    </div>
+                  ) : (
+                    <div className="text-gray-400 py-8">No image preview available</div>
+                  )}
+                </div>
+              </div>
+
+              {/* Background Type Selection */}
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Background Type</label>
+                <div className="flex space-x-4 mb-4">
+                  <div className="flex items-center">
+                    <input
+                      id="color-type"
+                      name="background-type"
+                      type="radio"
+                      checked={backgroundType === 'color'}
+                      onChange={() => setBackgroundType('color')}
+                      className="focus:ring-primary-500 h-4 w-4 text-primary-600 border-gray-300"
+                    />
+                    <label htmlFor="color-type" className="ml-2 block text-sm font-medium text-gray-700">
+                      Solid Color
+                    </label>
+                  </div>
+                  <div className="flex items-center">
+                    <input
+                      id="image-type"
+                      name="background-type"
+                      type="radio"
+                      checked={backgroundType === 'image'}
+                      onChange={() => setBackgroundType('image')}
+                      className="focus:ring-primary-500 h-4 w-4 text-primary-600 border-gray-300"
+                    />
+                    <label htmlFor="image-type" className="ml-2 block text-sm font-medium text-gray-700">
+                      Image
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              {backgroundType === 'color' ? (
+                <div className="mb-6">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Select Color</label>
+                  
+                  {/* Color Presets */}
+                  <div className="flex flex-wrap gap-2 mb-3">
+                    {backgroundColors.map(color => (
+                      <button
+                        key={color.value}
+                        type="button"
+                        onClick={() => setSelectedBackgroundColor(color.value)}
+                        className={`h-8 w-8 rounded-full focus:outline-none ${
+                          selectedBackgroundColor === color.value ? 'ring-2 ring-offset-2 ring-primary-500' : ''
+                        }`}
+                        style={{ backgroundColor: color.value }}
+                        title={color.name}
+                      ></button>
+                    ))}
+                  </div>
+                  
+                  {/* Custom Color Picker */}
+                  <div className="flex items-center mt-3">
+                    <input
+                      type="color"
+                      value={selectedBackgroundColor}
+                      onChange={(e) => setSelectedBackgroundColor(e.target.value)}
+                      className="h-8 w-8 p-0 border-0"
+                    />
+                    <span className="ml-2 text-sm text-gray-500">{selectedBackgroundColor}</span>
+                  </div>
+                </div>
+              ) : (
+                <div className="mb-6">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Upload Background Image</label>
+                  <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md">
+                    <div className="space-y-1 text-center">
+                      <svg
+                        className="mx-auto h-12 w-12 text-gray-400"
+                        stroke="currentColor"
+                        fill="none"
+                        viewBox="0 0 48 48"
+                        aria-hidden="true"
+                      >
+                        <path
+                          d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02"
+                          strokeWidth={2}
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                      <div className="flex text-sm text-gray-600 justify-center">
+                        <label
+                          htmlFor="bg-upload"
+                          className="relative cursor-pointer bg-white rounded-md font-medium text-primary-600 hover:text-primary-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-primary-500"
+                        >
+                          <span>Upload an image</span>
+                          <input
+                            id="bg-upload"
+                            name="bg-upload"
+                            type="file"
+                            className="sr-only"
+                            accept="image/*"
+                            onChange={handleBackgroundImageChange}
+                          />
+                        </label>
+                      </div>
+                      <p className="text-xs text-gray-500">PNG, JPG, GIF up to 10MB</p>
+                    </div>
+                  </div>
+                  {backgroundImage && (
+                    <div className="mt-2 text-sm text-gray-500">
+                      Selected: {backgroundImage.name}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div className="mt-6">
+                <button
+                  onClick={handleChangeBackground}
+                  disabled={!backgroundRemovedImage || loading}
+                  className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white ${
+                    !backgroundChangedImage|| loading
+                      ? 'bg-gray-300 cursor-not-allowed'
+                      : 'bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500'
+                  }`}
+                >
+                  {loading ? (
+                    <>
+                      <ArrowPathIcon className="animate-spin -ml-1 mr-2 h-5 w-5" />
+                      Processing...
+                    </>
+                  ) : (
+                    <>
+                      <PaintBrushIcon className="-ml-1 mr-2 h-5 w-5" />
+                      Apply Background
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {step === 3 && (
+          <div className="bg-white shadow overflow-hidden sm:rounded-lg">
+            <div className="px-4 py-5 sm:p-6">
               <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">Crop Photo</h3>
               <p className="text-sm text-gray-500 mb-6">
                 Adjust the cropping area to ensure proper head position and size for your {cropSizes[selectedSize].label}.
@@ -428,7 +685,7 @@ function App() {
 
               {/* Crop Container */}
               <div className="mb-6 max-w-2xl mx-auto">
-                {backgroundRemovedImage && (
+                {backgroundChangedImage && (
                   <ReactCrop
                     crop={crop}
                     onChange={(c) => setCrop(c)}
@@ -438,7 +695,7 @@ function App() {
                   >
                     <img
                       ref={imgRef}
-                      src={backgroundRemovedImage}
+                      src={backgroundChangedImage}
                       alt="Background Removed"
                       onLoad={handleImageLoad}
                       className="max-w-full max-h-[500px]"
