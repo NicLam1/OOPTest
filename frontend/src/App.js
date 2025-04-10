@@ -61,6 +61,7 @@ function App() {
   const [saturation, setSaturation] = useState(1);   // 0.5 to 3
   const [backgroundRemovedFile, setBackgroundRemovedFile] = useState(null);
   const [finalAdjustedImage, setFinalAdjustedImage] = useState(null);
+  const [customFilename, setCustomFilename] = useState('passport-photo');
 
 
 
@@ -209,13 +210,19 @@ function App() {
 
 
   const handleDownload = (url, format) => {
+    console.log("Downloading with filename:", customFilename); 
+    const filename = customFilename.trim() || 'passport-photo';
     const link = document.createElement('a');
     link.href = url;
     link.download = `passport-photo.${format}`;
+    link.download = `${filename}.${format}`;
+    console.log("Download attribute set to:", link.download);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
   };  
+
+  
 
   const calculatePixelDimensions = (width, height, unit, dpi = 300) => {
     let unitToInch;
@@ -947,7 +954,31 @@ function App() {
                       {' at '}{DPI} DPI.
                     </p>
                   </div>
-                  
+
+                  {/* Filename input field */}
+                  <div className="mb-4">
+                    <label htmlFor="filename" className="block text-sm font-medium text-gray-700 mb-1">
+                      Filename
+                    </label>
+                    <div className
+                            ="mt-1 flex rounded-md shadow-sm">
+                      <input
+                        type="text"
+                        id="filename"
+                        value={customFilename}
+                        onChange={(e) =>{
+                          console.log("Filename changed to:", e.target.value);
+                          setCustomFilename(e.target.value);  
+                        }}
+                        className="flex-1 focus:ring-primary-500 focus:border-primary-500 block w-full min-w-0 rounded-md sm:text-sm border-gray-300"
+                        placeholder="Enter filename without extension"
+                      />
+                      <span className="inline-flex items-center px-3 rounded-r-md border border-l-0 border-gray-300 bg-gray-50 text-gray-500 sm:text-sm">
+                        .{downloadFormat}
+                      </span>
+                    </div>
+                  </div>    
+
                   <button
                     onClick={() => handleDownload(processedImage, downloadFormat)}
                     className="w-full inline-flex justify-center items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-secondary-600 hover:bg-secondary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-secondary-500"
