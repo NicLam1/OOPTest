@@ -114,6 +114,39 @@ public class BackgroundChanger {
     }
 
     /**
+     * Apply a solid color background to a transparent image
+     * 
+     * @param imageBytes The image with transparent background as byte array
+     * @param colorHex   The background color in hex format (e.g., "#ffffff")
+     * @return The image with the new background color as byte array
+     */
+    public static byte[] addSolidColorBackground(byte[] imageBytes, String colorHex) {
+        try {
+            if (DEBUG) {
+                System.out.println("=== Color Background Change Debug Info ===");
+                System.out.println("Color hex: " + colorHex);
+            }
+
+            // Parse the hex color
+            Color color = Color.decode(colorHex);
+
+            if (DEBUG) {
+                System.out.println("Decoded color: R=" + color.getRed() +
+                        ", G=" + color.getGreen() +
+                        ", B=" + color.getBlue());
+                System.out.println("===================================");
+            }
+
+            return addSolidColorBackground(imageBytes, color);
+        } catch (NumberFormatException e) {
+            System.err.println("Invalid color format: " + e.getMessage());
+            e.printStackTrace();
+            // Fallback to white if color parsing fails
+            return addSolidColorBackground(imageBytes, Color.WHITE);
+        }
+    }
+
+    /**
      * Apply an image background to a transparent image with resize control
      * 
      * @param imageBytes     The transparent image as byte array
