@@ -356,7 +356,7 @@ public class PhotoService {
     // }
 
     public byte[] BackgroundChanger(byte[] transparentImg, String background) throws IOException {
-        byte[] resultsBytes = bgChanger.addBackgroundImg(transparentImg, background);
+        byte[] resultsBytes = BackgroundChanger.addBackgroundImgFromString(transparentImg, background);
         return resultsBytes;
     }
 

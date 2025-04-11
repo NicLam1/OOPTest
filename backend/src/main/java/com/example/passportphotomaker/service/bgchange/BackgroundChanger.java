@@ -185,4 +185,84 @@ public class BackgroundChanger {
             }
         }
     }
+
+    /**
+     * Apply an image background to a transparent image using a file path or URL
+     * 
+     * @param imageBytes The transparent image as byte array
+     * @param backgroundPath The path or URL to the background image
+     * @return The combined image as byte array
+     */
+    public static byte[] addBackgroundImgFromString(byte[] imageBytes, String backgroundPath) {
+        ByteArrayInputStream bais = null;
+        ByteArrayOutputStream baos = null;
+
+        try {
+            // Convert byte array to BufferedImage for the foreground
+            bais = new ByteArrayInputStream(imageBytes);
+            BufferedImage foregroundImg = ImageIO.read(bais);
+            bais.close();
+
+            // Read background image from path/URL
+            BufferedImage backgroundImg = ImageIO.read(new java.io.File(backgroundPath));
+
+            // Create the final output image
+            int width = foregroundImg.getWidth();
+            int height = foregroundImg.getHeight();
+            BufferedImage finalImage = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
+
+            // Create graphics for final composition
+            Graphics2D g2d = finalImage.createGraphics();
+            g2d.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+            g2d.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
+
+            // Scale background to fit the image dimensions while maintaining aspect ratio
+            double bgAspect = (double) backgroundImg.getWidth() / backgroundImg.getHeight();
+            double imgAspect = (double) width / height;
+
+            int bgWidth, bgHeight, bgX, bgY;
+
+            if (bgAspect > imgAspect) {
+                // Background is wider relative to its height than the image
+                bgHeight = height;
+                bgWidth = (int) (height * bgAspect);
+                bgX = (width - bgWidth) / 2;
+                bgY = 0;
+            } else {
+                // Background is taller relative to its width than the image
+                bgWidth = width;
+                bgHeight = (int) (width / bgAspect);
+                bgX = 0;
+                bgY = (height - bgHeight) / 2;
+            }
+
+            // Draw the background first
+            g2d.drawImage(backgroundImg, bgX, bgY, bgWidth, bgHeight, null);
+
+            // Now draw the foreground with alpha on top
+            g2d.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 1.0f));
+            g2d.drawImage(foregroundImg, 0, 0, null);
+
+            g2d.dispose();
+
+            // Convert result to byte array
+            baos = new ByteArrayOutputStream();
+            ImageIO.write(finalImage, "png", baos);
+            return baos.toByteArray();
+
+        } catch (Exception e) {
+            System.err.println("Error applying image background: " + e.getMessage());
+            e.printStackTrace();
+            return null;
+        } finally {
+            try {
+                if (bais != null)
+                    bais.close();
+                if (baos != null)
+                    baos.close();
+            } catch (IOException e) {
+                System.err.println("Error closing streams: " + e.getMessage());
+            }
+        }
+    }
 }
