@@ -737,6 +737,7 @@ function App() {
                 </div>
                 
                 {/* Custom Color Picker */}
+                <label className="block text-sm font-medium text-gray-700 mb-2">Custom Color</label>
                 <div className="flex items-center mt-3">
                   <input
                     type="color"
