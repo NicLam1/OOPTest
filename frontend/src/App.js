@@ -8,7 +8,8 @@ import {
   ArrowPathIcon,
   ScissorsIcon,
   DocumentArrowDownIcon,
-  PaintBrushIcon
+  PaintBrushIcon,
+  AdjustmentsHorizontalIcon  
 } from '@heroicons/react/24/outline';
 import { debounce } from 'lodash'; 
 
@@ -443,7 +444,7 @@ function App() {
           <div className="border-b border-gray-200">
             <nav className="-mb-px flex" aria-label="Tabs">
               <button
-                className={`w-1/3 py-4 px-1 text-center border-b-2 font-medium text-sm ${
+                className={`w-1/4 py-4 px-1 text-center border-b-2 font-medium text-sm ${
                   step === 1
                     ? 'border-primary-500 text-primary-600'
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
@@ -458,7 +459,7 @@ function App() {
                 </div>
               </button>
               <button
-                className={`w-1/3 py-4 px-1 text-center border-b-2 font-medium text-sm ${
+                className={`w-1/4 py-4 px-1 text-center border-b-2 font-medium text-sm ${
                   step === 2
                     ? 'border-primary-500 text-primary-600'
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
@@ -474,7 +475,7 @@ function App() {
                 </div>
               </button>
               <button
-                className={`w-1/3 py-4 px-1 text-center border-b-2 font-medium text-sm ${
+                className={`w-1/4 py-4 px-1 text-center border-b-2 font-medium text-sm ${
                   step === 3
                     ? 'border-primary-500 text-primary-600'
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
@@ -485,6 +486,22 @@ function App() {
                 <div className="flex justify-center items-center">
                   <span className="bg-gray-100 rounded-full h-6 w-6 flex items-center justify-center mr-2 border border-gray-300">
                     3
+                  </span>
+                  Adjust Image
+                </div>
+              </button>
+              <button
+                className={`w-1/4 py-4 px-1 text-center border-b-2 font-medium text-sm ${
+                  step === 4
+                    ? 'border-primary-500 text-primary-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+                onClick={() => finalAdjustedImage && setStep(4)}
+                disabled={!finalAdjustedImage}
+              >
+                <div className="flex justify-center items-center">
+                  <span className="bg-gray-100 rounded-full h-6 w-6 flex items-center justify-center mr-2 border border-gray-300">
+                    4
                   </span>
                   Crop & Process
                 </div>
@@ -800,50 +817,6 @@ function App() {
               </div>
             )}
 
-                <div className="mb-6">
-                  <h4 className="text-sm font-medium text-gray-700 mb-2">Adjustments</h4>
-
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm text-gray-600 mb-1">Brightness ({brightness})</label>
-                      <input
-                        type="range"
-                        min={-100}
-                        max={100}
-                        value={brightness}
-                        onChange={(e) => handleAdjustment('brightness', parseInt(e.target.value))}
-                        className="w-full"
-                      />
-                    </div>
-
-                    <div>
-                       <label className="block text-sm text-gray-600 mb-1">Contrast ({contrast.toFixed(2)})</label>
-                      <input
-                        type="range"
-                        min={0.5}
-                        max={3}
-                        step={0.05}
-                        value={contrast}
-                        onChange={(e) => handleAdjustment('contrast', parseFloat(e.target.value))}
-                        className="w-full"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm text-gray-600 mb-1">Saturation ({saturation.toFixed(2)})</label>
-                      <input
-                       type="range"
-                        min={0.5}
-                        max={3}
-                        step={0.05}
-                        value={saturation}
-                        onChange={(e) => handleAdjustment('saturation', parseFloat(e.target.value))}
-                        className="w-full"
-                      />
-                     </div>
-                    </div>
-                  </div>
-
               <div className="mt-6">
                 <button
                   onClick={handleChangeBackground}
@@ -872,6 +845,107 @@ function App() {
         )}
 
         {step === 3 && (
+          <div className="bg-white shadow overflow-hidden sm:rounded-lg">
+            <div className="px-4 py-5 sm:p-6">
+              <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">Adjust Image</h3>
+              <p className="text-sm text-gray-500 mb-6">
+                Fine-tune your photo's brightness, contrast, and saturation.
+              </p>
+
+              {/* Image Preview */}
+              <div className="mb-6">
+                <h4 className="text-sm font-medium text-gray-700 mb-2">Preview</h4>
+                <div className="bg-gray-100 border border-gray-200 rounded-lg p-4 flex justify-center items-center">
+                  {backgroundChangedImage ? (
+                    <div className="relative p-2 rounded-md">
+                      <img
+                        src={finalAdjustedImage || backgroundChangedImage}
+                        alt="Preview"
+                        className="max-h-64 rounded"
+                      />
+                    </div>
+                  ) : (
+                    <div className="text-gray-400 py-8">No image preview available</div>
+                  )}
+                </div>
+              </div>
+
+              {/* Adjustment Controls */}
+              <div className="mb-6">
+                <h4 className="text-sm font-medium text-gray-700 mb-2">Adjustments</h4>
+
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm text-gray-600 mb-1">Brightness ({brightness})</label>
+                    <input
+                      type="range"
+                      min={-100}
+                      max={100}
+                      value={brightness}
+                      onChange={(e) => handleAdjustment('brightness', parseInt(e.target.value))}
+                      className="w-full"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm text-gray-600 mb-1">Contrast ({contrast.toFixed(2)})</label>
+                    <input
+                      type="range"
+                      min={0.5}
+                      max={3}
+                      step={0.05}
+                      value={contrast}
+                      onChange={(e) => handleAdjustment('contrast', parseFloat(e.target.value))}
+                      className="w-full"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm text-gray-600 mb-1">Saturation ({saturation.toFixed(2)})</label>
+                    <input
+                      type="range"
+                      min={0.5}
+                      max={3}
+                      step={0.05}
+                      value={saturation}
+                      onChange={(e) => handleAdjustment('saturation', parseFloat(e.target.value))}
+                      className="w-full"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-6">
+                <button
+                  onClick={() => {
+                    setFinalAdjustedImage(finalAdjustedImage || backgroundChangedImage);
+                    setStep(4);
+                  }}
+                  disabled={!backgroundChangedImage || loading}
+                  className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white ${
+                    !backgroundChangedImage || loading
+                      ? 'bg-gray-300 cursor-not-allowed'
+                      : 'bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500'
+                  }`}
+                >
+                  {loading ? (
+                    <>
+                      <ArrowPathIcon className="animate-spin -ml-1 mr-2 h-5 w-5" />
+                      Processing...
+                    </>
+                  ) : (
+                    <>
+                      <AdjustmentsHorizontalIcon className="-ml-1 mr-2 h-5 w-5" />
+                      Apply Adjustments
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {step === 4 && (
           <div className="bg-white shadow overflow-hidden sm:rounded-lg">
             <div className="px-4 py-5 sm:p-6">
               <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">Crop Photo</h3>
