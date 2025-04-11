@@ -63,46 +63,66 @@ function App() {
   const [backgroundRemovedFile, setBackgroundRemovedFile] = useState(null);
   const [finalAdjustedImage, setFinalAdjustedImage] = useState(null);
   const [customFilename, setCustomFilename] = useState('passport-photo');
+  const [backgroundScale, setBackgroundScale] = useState(1.0);
+  const [backgroundOffsetX, setBackgroundOffsetX] = useState(0.0);
+  const [backgroundOffsetY, setBackgroundOffsetY] = useState(0.0);
 
 
 
+  // Update debouncedSendAdjustments to set finalAdjustedImage after applying adjustments
   const debouncedSendAdjustments = debounce(
-    async ({ brightness, contrast, saturation, imageFile }) => {
-      const imageToUse = imageFile || backgroundRemovedFile;
-      if (!imageToUse) return;
-  
-      console.log("📤 Sending to /adjust-photo", { brightness, contrast, saturation });
+    async ({ brightness, contrast, saturation }) => {
+      if (!backgroundRemovedFile) return;
+
+      console.log("Sending to /adjust-photo", { brightness, contrast, saturation });
 
       const formData = new FormData();
-      formData.append("image", imageToUse);
+      formData.append("image", backgroundRemovedFile);
       formData.append("brightness", brightness);
       formData.append("contrast", contrast);
       formData.append("saturation", saturation);
       formData.append("format", downloadFormat);
-  
-      for (let [key, value] of formData.entries()) {
-        console.log(`${key}:`, value);
+
+      // Add background parameters if they exist
+      if (backgroundType === 'color') {
+        formData.append('backgroundColor', selectedBackgroundColor);
+      } else if (backgroundType === 'image' && backgroundImage) {
+        formData.append('backgroundImg', backgroundImage);
+        formData.append('bgScale', backgroundScale);
+        formData.append('bgOffsetX', backgroundOffsetX);
+        formData.append('bgOffsetY', backgroundOffsetY);
       }
-  
-      const response = await fetch("http://localhost:8080/api/adjust-photo", {
-        method: "POST",
-        body: formData,
-      });
-  
-      if (!response.ok) {
-        console.error("Adjustment request failed:", response.status);
-        return;
+
+      try {
+        const response = await fetch("http://localhost:8080/api/adjust-photo", {
+          method: "POST",
+          body: formData,
+        });
+
+        if (!response.ok) {
+          console.error("Adjustment request failed:", response.status);
+          return;
+        }
+
+        const adjustedBlob = await response.blob();
+        console.log("Received adjusted image blob:", adjustedBlob);
+        
+        // Create new File from the adjusted blob
+        const adjustedFile = new File([adjustedBlob], "adjusted.png", { type: adjustedBlob.type });
+        
+        // Update the file reference for future adjustments
+        setBackgroundRemovedFile(adjustedFile);
+        
+        // Update UI with the adjusted image
+        const adjustedImageUrl = URL.createObjectURL(adjustedBlob);
+        setBackgroundChangedImage(adjustedImageUrl);
+        setFinalAdjustedImage(adjustedImageUrl);
+      } catch (error) {
+        console.error("Error during adjustment:", error);
       }
-  
-      const adjustedBlob = await response.blob();
-      console.log("Received adjusted image blob:", adjustedBlob);
-      console.log("Blob size:", adjustedBlob.size, "Type:", adjustedBlob.type);
-      setBackgroundChangedImage(URL.createObjectURL(adjustedBlob));
-      setFinalAdjustedImage(URL.createObjectURL(adjustedBlob));
     },
     300
-  );
-  
+  );  
   
   const [isPickingColor, setIsPickingColor] = useState(false);
   
@@ -340,6 +360,10 @@ function App() {
         formData.append('backgroundColor', selectedBackgroundColor);
       } else if (backgroundType === 'image' && backgroundImage) {
         formData.append('backgroundImg', backgroundImage);
+        // Add background resizing parameters
+        formData.append('bgScale', backgroundScale);
+        formData.append('bgOffsetX', backgroundOffsetX);
+        formData.append('bgOffsetY', backgroundOffsetY);
       }
   
       const apiResponse = await fetch('http://localhost:8080/api/process-photo', {
@@ -353,22 +377,23 @@ function App() {
   
       const resultBlob = await apiResponse.blob();
       const bgChangedUrl = URL.createObjectURL(resultBlob);
-
+  
       setBackgroundChangedImage(bgChangedUrl);
-
-      // 👇 Call adjustment with the new image applied
+  
+      // IMPORTANT: Set finalAdjustedImage to the background changed image as the starting point
+      setFinalAdjustedImage(bgChangedUrl);
+  
+      // Create a file from the blob for adjustment API calls
       const bgChangedFile = new File([resultBlob], "bg-changed.png", { type: resultBlob.type });
-      setBackgroundRemovedFile(bgChangedFile);
-      debouncedSendAdjustments({
-        brightness,
-        contrast,
-        saturation,
-        imageFile: bgChangedFile
-      });
-
-
+      setBackgroundRemovedFile(bgChangedFile); // Update to use the background-changed file
+  
+      // Reset brightness, contrast, and saturation to default values
+      setBrightness(0);
+      setContrast(1);
+      setSaturation(1);
+      
+      // Now move to step 3 (adjustments)
       setStep(3);
-      // Move to crop step
     } catch (err) {
       setError(err.message);
     } finally {
@@ -591,7 +616,7 @@ function App() {
                     <img
                       src={imageUrl}
                       alt="Uploaded"
-                      className="mx-auto max-h-64 rounded-lg shadow-md"
+                      className="mx-auto max-h-64 shadow-md"
                     />
                   </div>
                 )}
@@ -654,20 +679,25 @@ function App() {
                 <h4 className="text-sm font-medium text-gray-700 mb-2">Preview</h4>
                 <div className="bg-gray-100 border border-gray-200 rounded-lg p-4 flex justify-center items-center">
                   {backgroundRemovedImage ? (
-                    <div 
-                      className="relative p-2 rounded-md"
-                      style={{
-                        backgroundColor: backgroundType === 'color' ? selectedBackgroundColor : 'transparent',
-                        backgroundImage: backgroundType === 'image' && backgroundImage ? 
-                          `url(${URL.createObjectURL(backgroundImage)})` : 'none',
-                        backgroundSize: 'cover',
-                        backgroundPosition: 'center'
-                      }}
-                    >
+                    <div className="relative" style={{ maxWidth: '100%' }}>
+                      {/* The background container - no padding here */}
+                      <div 
+                        className="absolute inset-0"
+                        style={{
+                          backgroundColor: backgroundType === 'color' ? selectedBackgroundColor : 'transparent',
+                          backgroundImage: backgroundType === 'image' && backgroundImage ? 
+                            `url(${URL.createObjectURL(backgroundImage)})` : 'none',
+                          backgroundSize: 'cover',
+                          backgroundPosition: 'center'
+                        }}
+                      ></div>
+                      
+                      {/* The foreground image - no padding/border */}
                       <img
                         src={backgroundChangedImage || backgroundRemovedImage}
                         alt="Preview"
-                        className="max-h-64 rounded"
+                        className="relative z-10 max-h-64"
+                        style={{ display: 'block' }}
                       />
                     </div>
                   ) : (
@@ -857,11 +887,12 @@ function App() {
                 <h4 className="text-sm font-medium text-gray-700 mb-2">Preview</h4>
                 <div className="bg-gray-100 border border-gray-200 rounded-lg p-4 flex justify-center items-center">
                   {backgroundChangedImage ? (
-                    <div className="relative p-2 rounded-md">
+                    <div className="relative" style={{ maxWidth: '100%' }}>
                       <img
                         src={finalAdjustedImage || backgroundChangedImage}
                         alt="Preview"
-                        className="max-h-64 rounded"
+                        className="max-h-64"
+                        style={{ display: 'block' }}
                       />
                     </div>
                   ) : (
