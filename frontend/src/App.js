@@ -1,49 +1,11 @@
-import React, { useState, useRef } from 'react';
-import ReactCrop from 'react-image-crop';
-import 'react-image-crop/dist/ReactCrop.css'; 
-import { 
-  ArrowUpTrayIcon, 
-  PhotoIcon,
-  CheckCircleIcon,
-  ArrowPathIcon,
-  ScissorsIcon,
-  DocumentArrowDownIcon,
-  PaintBrushIcon,
-  AdjustmentsHorizontalIcon  
-} from '@heroicons/react/24/outline';
-import { debounce } from 'lodash'; 
+import React, { useState } from 'react';
+import { PhotoIcon } from '@heroicons/react/24/outline';
+import { UploadStep, BackgroundStep, AdjustStep, CropStep } from './components/Steps';
+import { cropSizes } from './constants';
 
-const cropSizes = {
-  '2x2': { 
-    label: '2x2 inches (US and India)', 
-    width: 2,
-    height: 2,
-    unit: 'inch' 
-  }, 
-  '35x45': { 
-    label: '35x45 mm (UK, Europe, Australia, Singapore, Nigeria)', 
-    width: 35,
-    height: 45,
-    unit: 'mm' 
-  },
-  '5x7': { 
-    label: '5x7 cm (Canada)', 
-    width: 5,
-    height: 7,
-    unit: 'cm' 
-  },
-  '33x48': { 
-    label: '33x48 mm (China)', 
-    width: 33,
-    height: 48,
-    unit: 'mm' 
-  },
-};
-
-// Standard DPI for passport photos
-const DPI = 300;
 
 function App() {
+  // Core application state
   const [selectedFile, setSelectedFile] = useState(null);
   const [imageUrl, setImageUrl] = useState(null);
   const [processedImage, setProcessedImage] = useState(null);
@@ -52,17 +14,23 @@ function App() {
   const [error, setError] = useState(null);
   const [selectedSize, setSelectedSize] = useState('35x45'); // default
   const [downloadFormat, setDownloadFormat] = useState('png');
-  const [step, setStep] = useState(1); // 1: Upload & Remove BG, 2: Change BG, 3:Crop & Process
+  const [step, setStep] = useState(1); // 1: Upload & Remove BG, 2: Change BG, 3: Adjust Photo, 4: Crop & Process
+  
+  // Background change state
   const [backgroundChangedImage, setBackgroundChangedImage] = useState(null);
   const [backgroundImage, setBackgroundImage] = useState(null);
-  const [backgroundType, setBackgroundType] = useState('color'); // 'color', 'image' or 'picker'
-  const [selectedBackgroundColor, setSelectedBackgroundColor] = useState('#ffffff'); // default white
-  const [brightness, setBrightness] = useState(0);   // -100 to 100
-  const [contrast, setContrast] = useState(1);       // 0.5 to 3
-  const [saturation, setSaturation] = useState(1);   // 0.5 to 3
+  const [backgroundType, setBackgroundType] = useState('color');
+  const [selectedBackgroundColor, setSelectedBackgroundColor] = useState('#ffffff');
+  
+  // Adjustment state
+  const [brightness, setBrightness] = useState(0);
+  const [contrast, setContrast] = useState(1);
+  const [saturation, setSaturation] = useState(1);
   const [backgroundRemovedFile, setBackgroundRemovedFile] = useState(null);
   const [originalImageFile, setOriginalImageFile] = useState(null); // Store original image for adjustments
   const [finalAdjustedImage, setFinalAdjustedImage] = useState(null);
+  
+  // Download state
   const [customFilename, setCustomFilename] = useState('passport-photo');
   const [backgroundScale, setBackgroundScale] = useState(1.0);
   const [backgroundOffsetX, setBackgroundOffsetX] = useState(0.0);
@@ -1002,128 +970,25 @@ function App() {
         )}
 
         {step === 4 && (
-          <div className="bg-white shadow overflow-hidden sm:rounded-lg">
-            <div className="px-4 py-5 sm:p-6">
-              <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">Crop Photo</h3>
-              <p className="text-sm text-gray-500 mb-6">
-                Adjust the cropping area to ensure proper head position and size for your {cropSizes[selectedSize].label}.
-              </p>
-
-              {/* Crop Container */}
-              <div className="mb-6 max-w-2xl mx-auto">
-                {backgroundChangedImage && (
-                  <ReactCrop
-                    crop={crop}
-                    onChange={(c) => setCrop(c)}
-                    onComplete={(c) => setCompletedCrop(c)}
-                    aspect={cropSizes[selectedSize].width / cropSizes[selectedSize].height}
-                    className="rounded-lg max-h-[500px] mx-auto"
-                  >
-                    <img
-                      ref={imgRef}
-                      src={
-                        step === 3
-                          ? (finalAdjustedImage ?? backgroundChangedImage)
-                          : backgroundChangedImage
-                      }
-                      alt="Background Removed"
-                      onLoad={handleImageLoad}
-                      className="max-w-full max-h-[500px]"
-                    />
-                  </ReactCrop>
-                )}
-                
-                <div className="mt-2 text-sm text-gray-500">
-                  <p>
-                    Drag to move. Drag corners to resize. The person's eyes should be about 2/3 from the bottom of the photo.
-                  </p>
-                </div>
-              </div>
-
-              {/* Process Button */}
-              <div className="flex justify-center mt-4">
-                <button
-                  onClick={handleSubmit}
-                  disabled={!completedCrop || loading}
-                  className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white ${
-                    !completedCrop || loading
-                      ? 'bg-gray-300 cursor-not-allowed'
-                      : 'bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500'
-                  }`}
-                >
-                  {loading ? (
-                    <>
-                      <ArrowPathIcon className="animate-spin -ml-1 mr-2 h-5 w-5" />
-                      Processing...
-                    </>
-                  ) : (
-                    <>
-                      <ScissorsIcon className="-ml-1 mr-2 h-5 w-5" />
-                      Crop & Process
-                    </>
-                  )}
-                </button>
-              </div>
-
-              {/* Result Preview */}
-              {processedImage && (
-                <div className="mt-8 bg-gray-50 p-6 rounded-lg border border-gray-200 max-w-xl mx-auto">
-                  <h3 className="text-lg font-medium text-gray-900 mb-4">Processed Photo</h3>
-                  
-                  <div className="bg-white p-2 rounded-lg shadow-sm border border-gray-100 mb-4">
-                    <img 
-                      src={processedImage} 
-                      alt="Processed" 
-                      className="mx-auto max-h-96 rounded"
-                    />
-                  </div>
-                  
-                  <div className="text-sm text-gray-500 mb-4">
-                    <p>
-                      Final size: {cropSizes[selectedSize].width}×{cropSizes[selectedSize].height} {cropSizes[selectedSize].unit}
-                      {' at '}{DPI} DPI.
-                    </p>
-                  </div>
-
-                  {/* Filename input field */}
-                  <div className="mb-4">
-                    <label htmlFor="filename" className="block text-sm font-medium text-gray-700 mb-1">
-                      Filename
-                    </label>
-                    <div className
-                            ="mt-1 flex rounded-md shadow-sm">
-                      <input
-                        type="text"
-                        id="filename"
-                        value={customFilename}
-                        onChange={(e) =>{
-                          console.log("Filename changed to:", e.target.value);
-                          setCustomFilename(e.target.value);  
-                        }}
-                        className="flex-1 focus:ring-primary-500 focus:border-primary-500 block w-full min-w-0 rounded-md sm:text-sm border-gray-300"
-                        placeholder="Enter filename without extension"
-                      />
-                      <span className="inline-flex items-center px-3 rounded-r-md border border-l-0 border-gray-300 bg-gray-50 text-gray-500 sm:text-sm">
-                        .{downloadFormat}
-                      </span>
-                    </div>
-                  </div>    
-
-                  <button
-                    onClick={() => handleDownload(processedImage, downloadFormat)}
-                    className="w-full inline-flex justify-center items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-secondary-600 hover:bg-secondary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-secondary-500"
-                  >
-                    <DocumentArrowDownIcon className="-ml-1 mr-2 h-5 w-5" />
-                    Download Photo
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
+          <CropStep
+            finalAdjustedImage={finalAdjustedImage}
+            cropSizes={cropSizes}
+            selectedSize={selectedSize}
+            downloadFormat={downloadFormat}
+            processedImage={processedImage}
+            setProcessedImage={setProcessedImage}
+            loading={loading}
+            setLoading={setLoading}
+            setError={setError}
+            customFilename={customFilename}
+            setCustomFilename={setCustomFilename}
+            imageSize={imageSize}
+            setImageSize={setImageSize}
+          />
         )}
       </main>
 
-      <footer className="bg-white mt-12">
+      <footer className="bg-white text-sm text-gray-500 text-center py-2 border-t">
         <div className="max-w-7xl mx-auto py-4 px-4 sm:px-6 lg:px-8">
           <p className="text-center text-sm text-gray-500">
             Passport Photo Maker - Create professional passport photos that meet international standards
