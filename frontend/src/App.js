@@ -65,48 +65,53 @@ function App() {
   const [backgroundScale, setBackgroundScale] = useState(1.0);
   const [backgroundOffsetX, setBackgroundOffsetX] = useState(0.0);
   const [backgroundOffsetY, setBackgroundOffsetY] = useState(0.0);
+  const [imageSize, setImageSize] = useState({ width: 0, height: 0 });
 
 
 
   // Update debouncedSendAdjustments to set finalAdjustedImage after applying adjustments
   const debouncedSendAdjustments = debounce(
-    async ({ brightness, contrast, saturation, imageFile }) => {
-      const imageToUse = imageFile || backgroundRemovedFile;
-      if (!imageToUse) return;
-
-      console.log("📤 Sending to /adjust-photo", { brightness, contrast, saturation });
-
+    async ({ brightness, contrast, saturation }) => {
+      if (!backgroundRemovedFile) return;
+  
+      console.log("Sending to /adjust-photo", { brightness, contrast, saturation });
+  
       const formData = new FormData();
-      formData.append("image", imageToUse);
+      formData.append("image", backgroundRemovedFile);
       formData.append("brightness", brightness);
       formData.append("contrast", contrast);
       formData.append("saturation", saturation);
       formData.append("format", downloadFormat);
-
+  
       try {
         const response = await fetch("http://localhost:8080/api/adjust-photo", {
           method: "POST",
           body: formData,
         });
-
+  
         if (!response.ok) {
           console.error("Adjustment request failed:", response.status);
           return;
         }
-
+  
         const adjustedBlob = await response.blob();
         console.log("Received adjusted image blob:", adjustedBlob);
         
-        // Set both the current display image and the final adjusted image
-        // that will be used for cropping in the next step
-        const adjustedImageUrl = URL.createObjectURL(adjustedBlob);
-        setBackgroundChangedImage(adjustedImageUrl);
-        setFinalAdjustedImage(adjustedImageUrl);
-      } catch (error) {
-        console.error("Error during adjustment:", error);
-      }
-    },
-    300
+      // Create new File from the adjusted blob
+      const adjustedFile = new File([adjustedBlob], "adjusted.png", { type: adjustedBlob.type });
+      
+      // Update the file reference for future adjustments
+      setBackgroundRemovedFile(adjustedFile);
+      
+      // Update UI with the adjusted image
+      const adjustedImageUrl = URL.createObjectURL(adjustedBlob);
+      setBackgroundChangedImage(adjustedImageUrl);
+      setFinalAdjustedImage(adjustedImageUrl);
+    } catch (error) {
+      console.error("Error during adjustment:", error);
+    }
+  },
+  300
   );
   
   
@@ -132,6 +137,44 @@ function App() {
   const [completedCrop, setCompletedCrop] = useState(null);
   const imgRef = useRef(null);
 
+  // Function to ensure a crop stays within image boundaries
+  const ensureCropWithinBounds = (crop, imageWidth, imageHeight) => {
+    let x = crop.x;
+    let y = crop.y;
+    let width = crop.width;
+    let height = crop.height;
+    
+    // If crop extends beyond right edge
+    if (x + width > imageWidth) {
+      // Adjust x position first
+      x = Math.max(0, imageWidth - width);
+      
+      // If it's still not fitting, reduce width
+      if (x + width > imageWidth) {
+        width = imageWidth - x;
+      }
+    }
+    
+    // If crop extends beyond bottom edge
+    if (y + height > imageHeight) {
+      // Adjust y position first
+      y = Math.max(0, imageHeight - height);
+      
+      // If it's still not fitting, reduce height
+      if (y + height > imageHeight) {
+        height = imageHeight - y;
+      }
+    }
+    
+    return {
+      ...crop,
+      x,
+      y,
+      width,
+      height
+    };
+  };
+
   const calculateInitialCrop = (imageWidth, imageHeight, aspectRatio) => {
     // Calculate crop dimensions that maintain aspect ratio
     let cropWidth, cropHeight;
@@ -147,16 +190,16 @@ function App() {
     }
     
     // Center the crop
-    const x = (imageWidth - cropWidth) / 2;
-    const y = (imageHeight - cropHeight) / 2;
+    const x = Math.max(0, (imageWidth - cropWidth) / 2);
+    const y = Math.max(0, (imageHeight - cropHeight) / 2);
     
-    return {
+    return ensureCropWithinBounds({
       unit: 'px',
       width: cropWidth,
       height: cropHeight,
       x: x,
       y: y
-    };
+    }, imageWidth, imageHeight);
   };
 
   const handleFileChange = (event) => {
@@ -175,8 +218,17 @@ function App() {
 
   const handleImageLoad = (e) => {
     const { naturalWidth, naturalHeight } = e.target;
+    
+    // Store image dimensions for future reference
+    setImageSize({ width: naturalWidth, height: naturalHeight });
+    
     const aspectRatio = cropSizes[selectedSize].width / cropSizes[selectedSize].height;
     const initialCrop = calculateInitialCrop(naturalWidth, naturalHeight, aspectRatio);
+    
+    // Log initial crop for debugging
+    console.log('Initial crop:', initialCrop);
+    console.log('Image dimensions:', naturalWidth, 'x', naturalHeight);
+    
     setCrop(initialCrop);
   };
 
@@ -366,20 +418,20 @@ function App() {
       const bgChangedUrl = URL.createObjectURL(resultBlob);
   
       setBackgroundChangedImage(bgChangedUrl);
+
+      // IMPORTANT: Set finalAdjustedImage to the background changed image as the starting point (fix the bug of uploaded background image not being used)
+      setFinalAdjustedImage(bgChangedUrl);
   
       // Create a file from the blob for adjustment API calls
       const bgChangedFile = new File([resultBlob], "bg-changed.png", { type: resultBlob.type });
-      setBackgroundRemovedFile(bgChangedFile);
+      setBackgroundRemovedFile(bgChangedFile); // Update to use the background-changed file
+
+      // Reset brightness, contrast, and saturation to default values
+      setBrightness(0);
+      setContrast(1);
+      setSaturation(1);
       
-      // Apply default adjustments
-      debouncedSendAdjustments({
-        brightness,
-        contrast,
-        saturation,
-        imageFile: bgChangedFile
-      });
-  
-      // Now move to step 3 (adjustments) instead of step 4
+      // Now move to step 3 (adjustments)
       setStep(3);
     } catch (err) {
       setError(err.message);
@@ -389,23 +441,18 @@ function App() {
   };
 
   const handleAdjustment = (key, value) => {
-    console.log("🔧 Adjustment triggered:", key, value);
-  
-    // Build the updated values explicitly
-    const updatedBrightness = key === 'brightness' ? value : brightness;
-    const updatedContrast = key === 'contrast' ? value : contrast;
-    const updatedSaturation = key === 'saturation' ? value : saturation;
+    console.log("Adjustment triggered:", key, value);
   
     // Update state
     if (key === 'brightness') setBrightness(value);
     if (key === 'contrast') setContrast(value);
     if (key === 'saturation') setSaturation(value);
   
-    // Call the debounced function with the *actual* updated values
+    // Call the debounced function with the updated values
     debouncedSendAdjustments({
-      brightness: updatedBrightness,
-      contrast: updatedContrast,
-      saturation: updatedSaturation,
+      brightness: key === 'brightness' ? value : brightness,
+      contrast: key === 'contrast' ? value : contrast,
+      saturation: key === 'saturation' ? value : saturation,
     });
   };
   
@@ -439,6 +486,17 @@ function App() {
     setBackgroundType('color'); // Switch back to color mode with the picked color
   };
 
+  // Handler for crop changes to ensure it stays within bounds
+  const handleCropChange = (newCrop) => {
+    if (imgRef.current) {
+      const { naturalWidth, naturalHeight } = imgRef.current;
+      const validatedCrop = ensureCropWithinBounds(newCrop, naturalWidth, naturalHeight);
+      setCrop(validatedCrop);
+    } else {
+      setCrop(newCrop);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white shadow">
@@ -467,7 +525,7 @@ function App() {
                   <span className="bg-gray-100 rounded-full h-6 w-6 flex items-center justify-center mr-2 border border-gray-300">
                     1
                   </span>
-                  <span className="hidden sm:inline">Upload & Remove BG</span>
+                  <span className="hidden sm:inline">Upload & Remove Background</span>
                   <span className="sm:hidden">Upload</span>
                 </div>
               </button>
@@ -1210,8 +1268,8 @@ function App() {
                 
                 <div className="text-sm text-gray-500 mb-4">
                   <p>
-                    Final size: {cropSizes[selectedSize].width}×{cropSizes[selectedSize].height} {cropSizes[selectedSize].unit}
-                    {' at '}{DPI} DPI.
+                    Final size: {cropSizes[selectedSize].width}×{cropSizes[selectedSize].height} {cropSizes[selectedSize].unit}.
+                    {/* {' at '}{DPI} DPI. */}
                   </p>
                 </div>
 
