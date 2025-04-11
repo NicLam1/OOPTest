@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
-import { PhotoIcon } from '@heroicons/react/24/outline';
-import { UploadStep, BackgroundStep, AdjustStep, CropStep } from './components/Steps';
+import React, { useState, useRef } from 'react';
+import debounce from 'lodash/debounce';
+import { PhotoIcon, ArrowPathIcon, CheckCircleIcon, PaintBrushIcon, AdjustmentsHorizontalIcon } from '@heroicons/react/24/outline';
+import { CropStep } from './components/Steps';
 import { cropSizes } from './constants';
 
 
@@ -36,7 +37,7 @@ function App() {
   const [backgroundOffsetX, setBackgroundOffsetX] = useState(0.0);
   const [backgroundOffsetY, setBackgroundOffsetY] = useState(0.0);
 
-
+  const [imageSize, setImageSize] = useState(null);
 
   // Update debouncedSendAdjustments to set finalAdjustedImage after applying adjustments
   const debouncedSendAdjustments = debounce(
@@ -423,7 +424,7 @@ function App() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 flex flex-col">
       <header className="bg-white shadow">
         <div className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
           <h1 className="text-3xl font-bold text-gray-900 flex items-center">
@@ -433,7 +434,7 @@ function App() {
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+      <main className="max-w-5xl w-full mx-auto py-6 flex-grow">
         {/* Progress Steps */}
         <div className="px-4 sm:px-0 mb-8">
           <div className="border-b border-gray-200">
