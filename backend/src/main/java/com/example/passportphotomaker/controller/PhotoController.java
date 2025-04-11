@@ -38,7 +38,10 @@ public class PhotoController {
             @RequestParam(value = "photoFormat", required = false) String photoFormat,
             @RequestParam(value = "photoWidth", required = false) Double photoWidth,
             @RequestParam(value = "photoHeight", required = false) Double photoHeight,
-            @RequestParam(value = "photoUnit", required = false) String photoUnit)
+            @RequestParam(value = "photoUnit", required = false) String photoUnit,
+            @RequestParam(value = "bgScale", required = false, defaultValue = "1.0") Double bgScale,
+            @RequestParam(value = "bgOffsetX", required = false, defaultValue = "0.0") Double bgOffsetX,
+            @RequestParam(value = "bgOffsetY", required = false, defaultValue = "0.0") Double bgOffsetY)
             throws IOException {
         try {
             if (file.isEmpty()) {
@@ -48,6 +51,7 @@ public class PhotoController {
             // Log the received parameters for debugging
             System.out.println("Received photo format: " + photoFormat);
             System.out.println("Received photo dimensions: " + photoWidth + "x" + photoHeight + " " + photoUnit);
+            System.out.println("Background scale: " + bgScale + ", offsetX: " + bgOffsetX + ", offsetY: " + bgOffsetY);
             
             // Determine what we're doing - removing background or changing background
             boolean isBackgroundChangeRequest = backgroundColor != null || backgroundImg != null;
@@ -64,9 +68,10 @@ public class PhotoController {
                     System.out.println("Applying color background: " + backgroundColor);
                     processedImageBytes = BackgroundChanger.addSolidColorBackground(file.getBytes(), backgroundColor);
                 } else if (backgroundImg != null && !backgroundImg.isEmpty()) {
-                    // Apply image background
+                    // Apply image background with scale and offset
                     System.out.println("Applying image background: " + backgroundImg.getOriginalFilename());
-                    processedImageBytes = BackgroundChanger.addBackgroundImg(file.getBytes(), backgroundImg);
+                    processedImageBytes = BackgroundChanger.addBackgroundImg(
+                        file.getBytes(), backgroundImg, bgScale, bgOffsetX, bgOffsetY);
                 } else {
                     // No background specified, just use the original image
                     processedImageBytes = file.getBytes();
@@ -123,6 +128,4 @@ public class PhotoController {
         return ResponseEntity.status(500).body(null);
     }
 }
-
-
 }
