@@ -72,17 +72,13 @@ public class BackgroundChanger {
     }
     
     /**
-     * Apply an image background to a transparent image with resize control
+     * Apply an image background to a transparent image
      * 
      * @param imageBytes The transparent image as byte array
      * @param backgroundFile The background image file
-     * @param scale Scale factor for the background (1.0 = original size)
-     * @param offsetX Horizontal offset for the background (percentage of image width, -1.0 to 1.0)
-     * @param offsetY Vertical offset for the background (percentage of image height, -1.0 to 1.0)
      * @return The combined image as byte array
      */
-    public static byte[] addBackgroundImg(byte[] imageBytes, MultipartFile backgroundFile, 
-                                        double scale, double offsetX, double offsetY) {
+    public static byte[] addBackgroundImg(byte[] imageBytes, MultipartFile backgroundFile) {
         try {
             // Convert byte array to BufferedImage
             ByteArrayInputStream bais = new ByteArrayInputStream(imageBytes);
@@ -91,9 +87,8 @@ public class BackgroundChanger {
             // Read background image
             BufferedImage backgroundImg = ImageIO.read(backgroundFile.getInputStream());
             
-            // Resize background with custom scale
-            BufferedImage resizedBackground = resizeBackground(backgroundImg, foregroundImg.getWidth(), 
-                                                              foregroundImg.getHeight(), scale, offsetX, offsetY);
+            // Resize background to match foreground dimensions
+            BufferedImage resizedBackground = resizeBackground(backgroundImg, foregroundImg.getWidth(), foregroundImg.getHeight());
             
             // Draw the foreground on top of background
             Graphics2D g2d = resizedBackground.createGraphics();
@@ -110,27 +105,15 @@ public class BackgroundChanger {
             return null;
         }
     }
-    
-    /**
-     * Overloaded method for backward compatibility
-     */
-    public static byte[] addBackgroundImg(byte[] imageBytes, MultipartFile backgroundFile) {
-        // Default values: no scaling (1.0) and no offset (0.0, 0.0)
-        return addBackgroundImg(imageBytes, backgroundFile, 1.0, 0.0, 0.0);
-    }
 
     /**
-     * Apply an image background using a file path with resize control
+     * Apply an image background using a file path
      * 
      * @param imageBytes The transparent image data
      * @param backgroundFilePath Path to the background image file
-     * @param scale Scale factor for the background
-     * @param offsetX Horizontal offset (-1.0 to 1.0)
-     * @param offsetY Vertical offset (-1.0 to 1.0)
      * @return The combined image as byte array
      */
-    public static byte[] addBackgroundImg(byte[] imageBytes, String backgroundFilePath,
-                                        double scale, double offsetX, double offsetY) {
+    public static byte[] addBackgroundImg(byte[] imageBytes, String backgroundFilePath) {
         try {
             // Convert byte array to BufferedImage
             ByteArrayInputStream bais = new ByteArrayInputStream(imageBytes);
@@ -139,9 +122,8 @@ public class BackgroundChanger {
             // Load background from file path
             BufferedImage backgroundImg = ImageIO.read(new File(backgroundFilePath));
             
-            // Resize background with custom scale and offset
-            BufferedImage resizedBackground = resizeBackground(backgroundImg, foregroundImg.getWidth(), 
-                                                             foregroundImg.getHeight(), scale, offsetX, offsetY);
+            // Resize background to match the foreground dimensions
+            BufferedImage resizedBackground = resizeBackground(backgroundImg, foregroundImg.getWidth(), foregroundImg.getHeight());
             
             // Draw the foreground on top of the background
             Graphics2D g2d = resizedBackground.createGraphics();
@@ -160,28 +142,23 @@ public class BackgroundChanger {
     }
     
     /**
-     * Overloaded method for backward compatibility
-     */
-    public static byte[] addBackgroundImg(byte[] imageBytes, String backgroundFilePath) {
-        // Default values: no scaling (1.0) and no offset (0.0, 0.0)
-        return addBackgroundImg(imageBytes, backgroundFilePath, 1.0, 0.0, 0.0);
-    }
-    
-    /**
-     * Resize a background image to match target dimensions with scale and position control
+     * Resize a background image to match target dimensions
      * 
      * @param backgroundImg The original background image
      * @param targetWidth The target width
      * @param targetHeight The target height
-     * @param scale Scale factor (1.0 = fit exactly, >1.0 = zoom in, <1.0 = zoom out)
-     * @param offsetX Horizontal offset (-1.0 to 1.0, where 0 is centered)
-     * @param offsetY Vertical offset (-1.0 to 1.0, where 0 is centered)
-     * @return The resized and positioned background image
+     * @return The resized background image
      */
-    private static BufferedImage resizeBackground(BufferedImage backgroundImg, int targetWidth, int targetHeight,
-                                                double scale, double offsetX, double offsetY) {
+    private static BufferedImage resizeBackground(BufferedImage backgroundImg, int targetWidth, int targetHeight) {
+        // If dimensions already match, no need to resize
+        if (backgroundImg.getWidth() == targetWidth && backgroundImg.getHeight() == targetHeight) {
+            return backgroundImg;
+        }
+        
         // Create a new BufferedImage with the target dimensions
         BufferedImage resizedImage = new BufferedImage(targetWidth, targetHeight, BufferedImage.TYPE_INT_ARGB);
+        
+        // Get the graphics context for the new image
         Graphics2D g2d = resizedImage.createGraphics();
         
         // Set rendering hints for better quality
@@ -190,29 +167,30 @@ public class BackgroundChanger {
             java.awt.RenderingHints.VALUE_INTERPOLATION_BILINEAR
         );
         
-        // Adjust background size based on scale
-        int tileWidth = (int)(backgroundImg.getWidth() * scale);
-        int tileHeight = (int)(backgroundImg.getHeight() * scale);
+        // Calculate dimensions to maintain aspect ratio and cover the entire area
+        double originalRatio = (double) backgroundImg.getWidth() / backgroundImg.getHeight();
+        double targetRatio = (double) targetWidth / targetHeight;
         
-        // Calculate offsets for tiling
-        int xOffset = (int)(offsetX * tileWidth);
-        int yOffset = (int)(offsetY * tileHeight);
+        int drawX = 0;
+        int drawY = 0;
+        int drawWidth = targetWidth;
+        int drawHeight = targetHeight;
         
-        // Create a tiled pattern by drawing multiple copies
-        for (int y = yOffset; y < targetHeight + tileHeight; y += tileHeight) {
-            for (int x = xOffset; x < targetWidth + tileWidth; x += tileWidth) {
-                g2d.drawImage(backgroundImg, x, y, tileWidth, tileHeight, null);
-            }
+        // Adjust dimensions to maintain aspect ratio while covering the target area
+        if (originalRatio > targetRatio) {
+            // Original image is wider, so scale by height
+            drawWidth = (int) (targetHeight * originalRatio);
+            drawX = (targetWidth - drawWidth) / 2;
+        } else {
+            // Original image is taller, so scale by width
+            drawHeight = (int) (targetWidth / originalRatio);
+            drawY = (targetHeight - drawHeight) / 2;
         }
         
+        // Draw the scaled image
+        g2d.drawImage(backgroundImg, drawX, drawY, drawWidth, drawHeight, null);
         g2d.dispose();
+        
         return resizedImage;
-    }
-    
-    /**
-     * Overloaded method for backward compatibility
-     */
-    private static BufferedImage resizeBackground(BufferedImage backgroundImg, int targetWidth, int targetHeight) {
-        return resizeBackground(backgroundImg, targetWidth, targetHeight, 1.0, 0.0, 0.0);
     }
 }
