@@ -61,6 +61,7 @@ function App() {
   const [contrast, setContrast] = useState(1);       // 0.5 to 3
   const [saturation, setSaturation] = useState(1);   // 0.5 to 3
   const [backgroundRemovedFile, setBackgroundRemovedFile] = useState(null);
+  const [originalImageFile, setOriginalImageFile] = useState(null); // Store original image for adjustments
   const [finalAdjustedImage, setFinalAdjustedImage] = useState(null);
   const [customFilename, setCustomFilename] = useState('passport-photo');
   const [backgroundScale, setBackgroundScale] = useState(1.0);
@@ -72,12 +73,13 @@ function App() {
   // Update debouncedSendAdjustments to set finalAdjustedImage after applying adjustments
   const debouncedSendAdjustments = debounce(
     async ({ brightness, contrast, saturation }) => {
-      if (!backgroundRemovedFile) return;
+      if (!originalImageFile) return;
 
       console.log("Sending to /adjust-photo", { brightness, contrast, saturation });
 
       const formData = new FormData();
-      formData.append("image", backgroundRemovedFile);
+      // Always use the original image for adjustments
+      formData.append("image", originalImageFile);
       formData.append("brightness", brightness);
       formData.append("contrast", contrast);
       formData.append("saturation", saturation);
@@ -109,9 +111,6 @@ function App() {
         
         // Create new File from the adjusted blob
         const adjustedFile = new File([adjustedBlob], "adjusted.png", { type: adjustedBlob.type });
-        
-        // Update the file reference for future adjustments
-        setBackgroundRemovedFile(adjustedFile);
         
         // Update UI with the adjusted image
         const adjustedImageUrl = URL.createObjectURL(adjustedBlob);
@@ -386,6 +385,9 @@ function App() {
       // Create a file from the blob for adjustment API calls
       const bgChangedFile = new File([resultBlob], "bg-changed.png", { type: resultBlob.type });
       setBackgroundRemovedFile(bgChangedFile); // Update to use the background-changed file
+      
+      // Store the original image for adjustments
+      setOriginalImageFile(bgChangedFile);
   
       // Reset brightness, contrast, and saturation to default values
       setBrightness(0);
@@ -946,7 +948,30 @@ function App() {
                 </div>
               </div>
 
-              <div className="mt-6">
+              <div className="mt-6 flex space-x-4">
+                <button
+                  onClick={() => {
+                    // Reset adjustments to default values
+                    setBrightness(0);
+                    setContrast(1);
+                    setSaturation(1);
+                    
+                    // Create URL for original image and update the UI
+                    if (originalImageFile) {
+                      const originalImageUrl = URL.createObjectURL(originalImageFile);
+                      setBackgroundChangedImage(originalImageUrl);
+                      setFinalAdjustedImage(originalImageUrl);
+                    }
+                  }}
+                  disabled={!originalImageFile || loading}
+                  className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="-ml-1 mr-2 h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  Revert to Original
+                </button>
+                
                 <button
                   onClick={() => {
                     setFinalAdjustedImage(finalAdjustedImage || backgroundChangedImage);

@@ -1,8 +1,13 @@
 package com.example.passportphotomaker.service.imageedit;
 
-import org.opencv.core.*;
+import java.util.ArrayList;
+import java.util.List;
+
+import org.opencv.core.Core;
+import org.opencv.core.CvType;
+import org.opencv.core.Mat;
+import org.opencv.core.Scalar;
 import org.opencv.imgproc.Imgproc;
-import java.util.*;
 
 public class ImageAdjuster {
 
@@ -34,7 +39,10 @@ public class ImageAdjuster {
 
         // 2. Brightness + contrast
         Mat adjusted = new Mat();
-        bgr.convertTo(adjusted, -1, contrast, brightness);
+        // For brightness, we want to map -100 to +100 to a reasonable pixel shift
+        // For OpenCV, brightness is added to each pixel, so we'll use a more moderate scale
+        double brightnessScaled = brightness; // Simple linear mapping
+        bgr.convertTo(adjusted, -1, contrast, brightnessScaled);
         bgr.release();
 
         // 3. Saturation in HSV

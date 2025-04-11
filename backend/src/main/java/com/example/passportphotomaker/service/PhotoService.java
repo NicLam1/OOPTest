@@ -4,6 +4,8 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 import javax.annotation.PostConstruct;
 import javax.annotation.PreDestroy;
@@ -43,6 +45,10 @@ public class PhotoService {
     @Value("${background.removal.method:auto}")
     private String backgroundRemovalMethod;
 
+    // Add a simple in-memory cache to store original images (for demo/test purposes)
+    private static final Map<String, Mat> originalImageCache = new ConcurrentHashMap<>();
+    private static final int MAX_CACHE_SIZE = 10; // Limit cache size
+
     @PostConstruct
     public void init() { // Loads OpenCV
         try {
@@ -63,6 +69,16 @@ public class PhotoService {
     public void cleanup() {
         // Clean up resources when the application is shutting down
         System.out.println("Cleaning up resources in PhotoService");
+
+        // Clean up the image cache
+        for (Mat mat : originalImageCache.values()) {
+            try {
+                mat.release();
+            } catch (Exception e) {
+                System.err.println("Error releasing cached Mat: " + e.getMessage());
+            }
+        }
+        originalImageCache.clear();
 
         if (bgRemover != null) {
             try {
@@ -379,34 +395,60 @@ public class PhotoService {
     }
 
     /**
- * Applies brightness, contrast, and saturation adjustments to an image sent from the frontend.
- *
- * @param file Multipart image file (with transparent background)
- * @param brightness Brightness level (-100 to 100)
- * @param contrast Contrast level (1.0 = no change)
- * @param saturation Saturation level (1.0 = no change)
- * @return The adjusted image as byte array
- * @throws IOException If processing fails
- */
+     * Applies brightness, contrast, and saturation adjustments to an image sent from the frontend.
+     *
+     * @param file Multipart image file (with transparent background)
+     * @param brightness Brightness level (-100 to 100)
+     * @param contrast Contrast level (1.0 = no change)
+     * @param saturation Saturation level (1.0 = no change)
+     * @return The adjusted image as byte array
+     * @throws IOException If processing fails
+     */
     public byte[] adjustImage(MultipartFile file, double brightness, double contrast, double saturation) throws IOException {
         File tempFile = null;
         File outputFile = null;
-        Mat image = null;
+        Mat originalImage = null;
         Mat adjusted = null;
 
         try {
             // Validate and upload to temp
             validateInputFile(file);
             tempFile = uploadToTempFile(file);
-
-            // Read with OpenCV
-            image = Imgcodecs.imread(tempFile.getAbsolutePath(), Imgcodecs.IMREAD_UNCHANGED);
-            if (image.empty()) {
-                throw new IOException("Failed to read image for adjustment");
+            
+            // Generate a key for this image (using filename and last modified time)
+            String imageKey = file.getOriginalFilename() + "_" + file.getSize();
+            
+            // Check if we already have the original image in cache
+            if (!originalImageCache.containsKey(imageKey)) {
+                // Read with OpenCV - store the original image
+                originalImage = Imgcodecs.imread(tempFile.getAbsolutePath(), Imgcodecs.IMREAD_UNCHANGED);
+                
+                if (originalImage.empty()) {
+                    throw new IOException("Failed to read image for adjustment");
+                }
+                
+                // Store in cache (with size limit check)
+                if (originalImageCache.size() >= MAX_CACHE_SIZE) {
+                    // Remove oldest entry if cache is full (simplified approach)
+                    String oldestKey = originalImageCache.keySet().iterator().next();
+                    Mat oldMat = originalImageCache.remove(oldestKey);
+                    if (oldMat != null) {
+                        oldMat.release();
+                    }
+                }
+                
+                originalImageCache.put(imageKey, originalImage.clone());
+                System.out.println("Original image cached with key: " + imageKey);
+            } else {
+                System.out.println("Using cached original image with key: " + imageKey);
             }
+            
+            // Get original image from cache
+            originalImage = originalImageCache.get(imageKey).clone();
 
-            // Apply adjustments
-            adjusted = ImageAdjuster.applyAdjustments(image, brightness, contrast, saturation);
+            // Apply adjustments directly to a copy of the original
+            adjusted = ImageAdjuster.applyAdjustments(originalImage, brightness, contrast, saturation);
+            originalImage.release(); // Release this copy
 
             // Save output
             outputFile = File.createTempFile("adjusted-", ".png");
@@ -422,7 +464,6 @@ public class PhotoService {
             if (debugMode) e.printStackTrace();
             throw new IOException("Error adjusting image", e);
         } finally {
-            releaseMatSafely(image);
             releaseMatSafely(adjusted);
             deleteTempFileSafely(tempFile);
             deleteTempFileSafely(outputFile);
