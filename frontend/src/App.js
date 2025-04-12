@@ -33,6 +33,7 @@ function App() {
   
   // Download state
   const [customFilename, setCustomFilename] = useState('passport-photo');
+  const [useOutputFolder, setUseOutputFolder] = useState(false);
   const [backgroundScale, setBackgroundScale] = useState(1.0);
   const [backgroundOffsetX, setBackgroundOffsetX] = useState(0.0);
   const [backgroundOffsetY, setBackgroundOffsetY] = useState(0.0);
@@ -198,18 +199,57 @@ function App() {
   };
 
 
-  const handleDownload = (url, format) => {
+  const handleDownload = async (url, format, useOutputFolder = false) => {
     console.log("Downloading with filename:", customFilename); 
     const filename = customFilename.trim() || 'passport-photo';
+    
+    if (useOutputFolder && 'showSaveFilePicker' in window) {
+      try {
+        // Convert dataURL to Blob
+        const response = await fetch(url);
+        const blob = await response.blob();
+        
+        // Fixed options object for showSaveFilePicker
+        const options = {
+          suggestedName: `${filename}.${format}`,
+          types: [{
+            description: format === 'png' ? 'PNG Images' : 'JPEG Images',
+            accept: {
+              [format === 'png' ? 'image/png' : 'image/jpeg']: [`.${format}`]
+            }
+          }]
+        };
+        
+        // Show file picker to select output folder/filename
+        const fileHandle = await window.showSaveFilePicker(options);
+        
+        // Get writable stream and write the blob
+        const writable = await fileHandle.createWritable();
+        await writable.write(blob);
+        await writable.close();
+        
+        console.log("File saved to selected folder");
+      } catch (err) {
+        console.error("Error saving to folder:", err);
+        // Fallback to default download if an error occurs
+        downloadViaLink(url, filename, format);
+      }
+    } else {
+      // Use traditional download method
+      downloadViaLink(url, filename, format);
+    }
+  };
+  
+  // Helper function for traditional download
+  const downloadViaLink = (url, filename, format) => {
     const link = document.createElement('a');
     link.href = url;
-    link.download = `passport-photo.${format}`;
     link.download = `${filename}.${format}`;
     console.log("Download attribute set to:", link.download);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-  };  
+  };
 
   
 
@@ -530,18 +570,25 @@ function App() {
                 <label htmlFor="size-select" className="block text-sm font-medium text-gray-700 mb-2">
                   Passport Photo Size
                 </label>
-                <select
-                  id="size-select"
-                  value={selectedSize}
-                  onChange={(e) => setSelectedSize(e.target.value)}
-                  className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm rounded-md"
-                >
-                  {Object.entries(cropSizes).map(([key, size]) => (
-                    <option key={key} value={key}>
-                      {size.label}
-                    </option>
-                  ))}
-                </select>
+                <div className="relative">
+                  <select
+                    id="size-select"
+                    value={selectedSize}
+                    onChange={(e) => setSelectedSize(e.target.value)}
+                    className="mt-1 block w-full pl-3 pr-10 py-2 text-base border border-gray-300 focus:outline-none focus:ring-gray-400 focus:border-gray-400 sm:text-sm rounded-md appearance-none"
+                  >
+                    {Object.entries(cropSizes).map(([key, size]) => (
+                      <option key={key} value={key}>
+                        {size.label}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
+                    <svg className="h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                </div>
               </div>
 
               {/* File Upload Section */}
@@ -591,22 +638,6 @@ function App() {
                     />
                   </div>
                 )}
-              </div>
-
-              {/* Output Format Selection */}
-              <div className="mt-6">
-                <label htmlFor="format-select" className="block text-sm font-medium text-gray-700 mb-2">
-                  Output Format
-                </label>
-                <select
-                  id="format-select"
-                  value={downloadFormat}
-                  onChange={(e) => setDownloadFormat(e.target.value)}
-                  className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm rounded-md"
-                >
-                  <option value="png">PNG</option>
-                  <option value="jpeg">JPEG</option>
-                </select>
               </div>
 
               {/* Remove Background Button */}
@@ -977,6 +1008,7 @@ function App() {
             cropSizes={cropSizes}
             selectedSize={selectedSize}
             downloadFormat={downloadFormat}
+            setDownloadFormat={setDownloadFormat}
             processedImage={processedImage}
             setProcessedImage={setProcessedImage}
             loading={loading}
@@ -986,6 +1018,9 @@ function App() {
             setCustomFilename={setCustomFilename}
             imageSize={imageSize}
             setImageSize={setImageSize}
+            useOutputFolder={useOutputFolder}
+            setUseOutputFolder={setUseOutputFolder}
+            handleDownload={handleDownload}
           />
         )}
       </main>

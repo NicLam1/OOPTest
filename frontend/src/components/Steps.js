@@ -1,40 +1,44 @@
-import React, { useRef } from 'react';
-import ReactCrop from 'react-image-crop';
-import 'react-image-crop/dist/ReactCrop.css';
-import { 
-  ArrowUpTrayIcon, 
+import React, { useRef } from "react";
+import ReactCrop from "react-image-crop";
+import "react-image-crop/dist/ReactCrop.css";
+import {
+  ArrowUpTrayIcon,
   PhotoIcon,
   CheckCircleIcon,
   ArrowPathIcon,
   ScissorsIcon,
   DocumentArrowDownIcon,
-  PaintBrushIcon
-} from '@heroicons/react/24/outline';
-import { backgroundColors, cropSizes } from '../constants';
-import { 
-  removeBackground, 
-  changeBackground, 
-  debouncedAdjustImage, 
+  PaintBrushIcon,
+} from "@heroicons/react/24/outline";
+import { backgroundColors, cropSizes } from "../constants";
+import {
+  removeBackground,
+  changeBackground,
+  debouncedAdjustImage,
   calculateInitialCrop,
   calculatePixelDimensions,
-  cropImage
-} from '../utils/imageHandlers';
+  cropImage,
+} from "../utils/imageHandlers";
 
 /**
- * Step 1: Upload & Remove Background 
+ * Step 1: Upload & Remove Background
  */
-export const UploadStep = ({ 
-  selectedFile, setSelectedFile, 
-  imageUrl, setImageUrl, 
-  selectedSize, setSelectedSize,
-  downloadFormat, setDownloadFormat,
-  loading, setLoading,
+export const UploadStep = ({
+  selectedFile,
+  setSelectedFile,
+  imageUrl,
+  setImageUrl,
+  selectedSize,
+  setSelectedSize,
+  downloadFormat,
+  setDownloadFormat,
+  loading,
+  setLoading,
   setError,
   setBackgroundRemovedImage,
   setBackgroundRemovedFile,
-  setStep
+  setStep,
 }) => {
-
   const handleFileChange = (event) => {
     const file = event.target.files[0];
     setSelectedFile(file);
@@ -50,8 +54,11 @@ export const UploadStep = ({
 
     try {
       setLoading(true);
-      const { imageUrl, imageFile } = await removeBackground(selectedFile, downloadFormat);
-      
+      const { imageUrl, imageFile } = await removeBackground(
+        selectedFile,
+        downloadFormat
+      );
+
       setBackgroundRemovedImage(imageUrl);
       setBackgroundRemovedFile(imageFile);
       setStep(2);
@@ -67,7 +74,10 @@ export const UploadStep = ({
       <div className="px-4 py-5 sm:p-6">
         {/* Photo Size Selection */}
         <div className="mb-6">
-          <label htmlFor="size-select" className="block text-sm font-medium text-gray-700 mb-2">
+          <label
+            htmlFor="size-select"
+            className="block text-sm font-medium text-gray-700 mb-2"
+          >
             Passport Photo Size
           </label>
           <select
@@ -135,7 +145,10 @@ export const UploadStep = ({
 
         {/* Output Format Selection */}
         <div className="mt-6">
-          <label htmlFor="format-select" className="block text-sm font-medium text-gray-700 mb-2">
+          <label
+            htmlFor="format-select"
+            className="block text-sm font-medium text-gray-700 mb-2"
+          >
             Output Format
           </label>
           <select
@@ -156,8 +169,8 @@ export const UploadStep = ({
             disabled={!selectedFile || loading}
             className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white ${
               !selectedFile || loading
-                ? 'bg-gray-300 cursor-not-allowed'
-                : 'bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500'
+                ? "bg-gray-300 cursor-not-allowed"
+                : "bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
             }`}
           >
             {loading ? (
@@ -183,18 +196,28 @@ export const UploadStep = ({
  */
 export const BackgroundStep = ({
   backgroundRemovedImage,
-  backgroundChangedImage, setBackgroundChangedImage,
-  backgroundImage, setBackgroundImage,
-  backgroundType, setBackgroundType,
-  selectedBackgroundColor, setSelectedBackgroundColor,
-  brightness, setBrightness,
-  contrast, setContrast,
-  saturation, setSaturation,
-  backgroundRemovedFile, setBackgroundRemovedFile,
+  backgroundChangedImage,
+  setBackgroundChangedImage,
+  backgroundImage,
+  setBackgroundImage,
+  backgroundType,
+  setBackgroundType,
+  selectedBackgroundColor,
+  setSelectedBackgroundColor,
+  brightness,
+  setBrightness,
+  contrast,
+  setContrast,
+  saturation,
+  setSaturation,
+  backgroundRemovedFile,
+  setBackgroundRemovedFile,
   downloadFormat,
-  loading, setLoading, setError,
+  loading,
+  setLoading,
+  setError,
   setFinalAdjustedImage,
-  setStep
+  setStep,
 }) => {
   const [isPickingColor, setIsPickingColor] = React.useState(false);
   const [backgroundScale, setBackgroundScale] = React.useState(1.0);
@@ -205,37 +228,42 @@ export const BackgroundStep = ({
     const file = event.target.files[0];
     if (file) {
       setBackgroundImage(file);
-      setBackgroundType('image');
+      setBackgroundType("image");
     }
   };
 
   const handleImageColorPick = (e) => {
     if (!isPickingColor) return;
-    
+
     // Get canvas context from the image
-    const canvas = document.createElement('canvas');
+    const canvas = document.createElement("canvas");
     const img = e.target;
     canvas.width = img.naturalWidth;
     canvas.height = img.naturalHeight;
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext("2d");
     ctx.drawImage(img, 0, 0);
-    
+
     // Get the pixel data at the click position
     const rect = img.getBoundingClientRect();
-    const x = Math.round((e.clientX - rect.left) * (img.naturalWidth / rect.width));
-    const y = Math.round((e.clientY - rect.top) * (img.naturalHeight / rect.height));
+    const x = Math.round(
+      (e.clientX - rect.left) * (img.naturalWidth / rect.width)
+    );
+    const y = Math.round(
+      (e.clientY - rect.top) * (img.naturalHeight / rect.height)
+    );
     const pixelData = ctx.getImageData(x, y, 1, 1).data;
-    
+
     // Convert to hex
-    const hex = '#' + 
-      ('0' + pixelData[0].toString(16)).slice(-2) +
-      ('0' + pixelData[1].toString(16)).slice(-2) +
-      ('0' + pixelData[2].toString(16)).slice(-2);
-    
+    const hex =
+      "#" +
+      ("0" + pixelData[0].toString(16)).slice(-2) +
+      ("0" + pixelData[1].toString(16)).slice(-2) +
+      ("0" + pixelData[2].toString(16)).slice(-2);
+
     // Update color and exit picking mode
     setSelectedBackgroundColor(hex);
     setIsPickingColor(false);
-    setBackgroundType('color'); // Switch back to color mode with the picked color
+    setBackgroundType("color"); // Switch back to color mode with the picked color
   };
 
   const handleChangeBackground = async () => {
@@ -243,26 +271,30 @@ export const BackgroundStep = ({
       setError("Please complete background removal first.");
       return;
     }
-  
+
     try {
       setLoading(true);
-      
+
       // Get the image as a blob
       const response = await fetch(backgroundRemovedImage);
       const imageBlob = await response.blob();
-      
+
       const options = {
         downloadFormat,
         backgroundType,
-        backgroundColor: backgroundType === 'color' ? selectedBackgroundColor : null,
-        backgroundImage: backgroundType === 'image' ? backgroundImage : null,
+        backgroundColor:
+          backgroundType === "color" ? selectedBackgroundColor : null,
+        backgroundImage: backgroundType === "image" ? backgroundImage : null,
         backgroundScale,
         backgroundOffsetX,
-        backgroundOffsetY
+        backgroundOffsetY,
       };
 
-      const { imageUrl, imageFile } = await changeBackground(imageBlob, options);
-  
+      const { imageUrl, imageFile } = await changeBackground(
+        imageBlob,
+        options
+      );
+
       setBackgroundChangedImage(imageUrl);
       setFinalAdjustedImage(imageUrl);
       setBackgroundRemovedFile(imageFile);
@@ -271,7 +303,7 @@ export const BackgroundStep = ({
       setBrightness(0);
       setContrast(1);
       setSaturation(1);
-      
+
       // Now move to step 3 (adjustments)
       setStep(3);
     } catch (err) {
@@ -284,7 +316,9 @@ export const BackgroundStep = ({
   return (
     <div className="bg-white shadow overflow-hidden sm:rounded-lg">
       <div className="px-4 py-5 sm:p-6">
-        <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">Change Background</h3>
+        <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">
+          Change Background
+        </h3>
         <p className="text-sm text-gray-500 mb-6">
           Choose a background color or upload an image to use as the background.
         </p>
@@ -294,33 +328,44 @@ export const BackgroundStep = ({
           <h4 className="text-sm font-medium text-gray-700 mb-2">Preview</h4>
           <div className="bg-gray-100 border border-gray-200 rounded-lg p-4 flex justify-center items-center overflow-hidden">
             {backgroundRemovedImage ? (
-              <div className="relative" style={{ maxWidth: '100%', maxHeight: '300px', overflow: 'hidden' }}>
-                {backgroundType === 'image' && backgroundImage && (
-                  <div 
+              <div
+                className="relative"
+                style={{
+                  maxWidth: "100%",
+                  maxHeight: "300px",
+                  overflow: "hidden",
+                }}
+              >
+                {backgroundType === "image" && backgroundImage && (
+                  <div
                     style={{
-                      position: 'absolute',
+                      position: "absolute",
                       top: 0,
                       left: 0,
                       right: 0,
                       bottom: 0,
-                      backgroundImage: `url(${URL.createObjectURL(backgroundImage)})`,
+                      backgroundImage: `url(${URL.createObjectURL(
+                        backgroundImage
+                      )})`,
                       backgroundSize: `${backgroundScale * 100}%`,
-                      backgroundPosition: `${50 + (backgroundOffsetX * 50)}% ${50 + (backgroundOffsetY * 50)}%`,
-                      zIndex: 0
+                      backgroundPosition: `${50 + backgroundOffsetX * 50}% ${
+                        50 + backgroundOffsetY * 50
+                      }%`,
+                      zIndex: 0,
                     }}
                   />
                 )}
-                
-                {backgroundType === 'color' && (
-                  <div 
+
+                {backgroundType === "color" && (
+                  <div
                     className="absolute inset-0"
-                    style={{ 
+                    style={{
                       backgroundColor: selectedBackgroundColor,
-                      zIndex: 0
+                      zIndex: 0,
                     }}
                   />
                 )}
-                
+
                 <img
                   src={backgroundChangedImage || backgroundRemovedImage}
                   alt="Preview"
@@ -328,28 +373,35 @@ export const BackgroundStep = ({
                 />
               </div>
             ) : (
-              <div className="text-gray-400 py-8">No image preview available</div>
+              <div className="text-gray-400 py-8">
+                No image preview available
+              </div>
             )}
           </div>
         </div>
 
         {/* Background Type Selection */}
         <div className="mb-6">
-          <label className="block text-sm font-medium text-gray-700 mb-2">Background Type</label>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Background Type
+          </label>
           <div className="flex space-x-4 mb-4">
             <div className="flex items-center">
               <input
                 id="color-type"
                 name="background-type"
                 type="radio"
-                checked={backgroundType === 'color'}
+                checked={backgroundType === "color"}
                 onChange={() => {
-                  setBackgroundType('color');
+                  setBackgroundType("color");
                   setIsPickingColor(false);
                 }}
                 className="focus:ring-primary-500 h-4 w-4 text-primary-600 border-gray-300"
               />
-              <label htmlFor="color-type" className="ml-2 block text-sm font-medium text-gray-700">
+              <label
+                htmlFor="color-type"
+                className="ml-2 block text-sm font-medium text-gray-700"
+              >
                 Solid Color
               </label>
             </div>
@@ -358,14 +410,17 @@ export const BackgroundStep = ({
                 id="image-type"
                 name="background-type"
                 type="radio"
-                checked={backgroundType === 'image'}
+                checked={backgroundType === "image"}
                 onChange={() => {
-                  setBackgroundType('image');
+                  setBackgroundType("image");
                   setIsPickingColor(false);
                 }}
                 className="focus:ring-primary-500 h-4 w-4 text-primary-600 border-gray-300"
               />
-              <label htmlFor="image-type" className="ml-2 block text-sm font-medium text-gray-700">
+              <label
+                htmlFor="image-type"
+                className="ml-2 block text-sm font-medium text-gray-700"
+              >
                 Image
               </label>
             </div>
@@ -373,38 +428,46 @@ export const BackgroundStep = ({
         </div>
 
         {/* Color controls - only visible when 'color' type is selected */}
-        {backgroundType === 'color' && (
+        {backgroundType === "color" && (
           <div className="mb-6">
-            <label className="block text-sm font-medium text-gray-700 mb-2">Select Color</label>
-            
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Select Color
+            </label>
+
             {/* Color Presets */}
             <div className="flex flex-wrap gap-2 mb-3">
-              {backgroundColors.map(color => (
+              {backgroundColors.map((color) => (
                 <button
                   key={color.value}
                   type="button"
                   onClick={() => setSelectedBackgroundColor(color.value)}
                   className={`h-8 w-8 rounded-full focus:outline-none ${
-                    selectedBackgroundColor === color.value ? 'ring-2 ring-offset-2 ring-primary-500' : ''
+                    selectedBackgroundColor === color.value
+                      ? "ring-2 ring-offset-2 ring-primary-500"
+                      : ""
                   }`}
                   style={{ backgroundColor: color.value }}
                   title={color.name}
                 ></button>
               ))}
             </div>
-            
+
             {/* Custom Color Picker */}
-            <label className="block text-sm font-medium text-gray-700 mb-2">Custom Color </label>
-            <div className="flex items-center mt-3"> 
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Custom Color{" "}
+            </label>
+            <div className="flex items-center mt-3">
               <input
                 type="color"
                 value={selectedBackgroundColor}
                 onChange={(e) => setSelectedBackgroundColor(e.target.value)}
                 className="h-8 w-8 p-0 border-0"
               />
-              <span className="ml-2 text-sm text-gray-500">{selectedBackgroundColor}</span>
+              <span className="ml-2 text-sm text-gray-500">
+                {selectedBackgroundColor}
+              </span>
             </div>
-            
+
             {/* Pick color from image section */}
             <div className="mt-4 border-t border-gray-200 pt-4">
               <button
@@ -412,20 +475,22 @@ export const BackgroundStep = ({
                 onClick={() => setIsPickingColor(!isPickingColor)}
                 className="inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-md text-primary-600 bg-primary-50 hover:bg-primary-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
               >
-                {isPickingColor ? 'Cancel picking' : 'Pick color from image'}
+                {isPickingColor ? "Cancel picking" : "Pick color from image"}
               </button>
             </div>
           </div>
         )}
 
         {/* Image background controls - only visible when 'image' type is selected */}
-        {backgroundType === 'image' && (
+        {backgroundType === "image" && (
           <>
             {/* Background Resize Controls - only if an image is uploaded */}
             {backgroundImage && (
               <div className="mb-6">
-                <h4 className="text-sm font-medium text-gray-700 mb-2">Background Resize Controls</h4>
-                
+                <h4 className="text-sm font-medium text-gray-700 mb-2">
+                  Background Resize Controls
+                </h4>
+
                 {/* Scale Control */}
                 <div className="mb-3">
                   <label className="block text-sm text-gray-600 mb-1">
@@ -437,11 +502,13 @@ export const BackgroundStep = ({
                     max="2.0"
                     step="0.1"
                     value={backgroundScale}
-                    onChange={(e) => setBackgroundScale(parseFloat(e.target.value))}
+                    onChange={(e) =>
+                      setBackgroundScale(parseFloat(e.target.value))
+                    }
                     className="w-full"
                   />
                 </div>
-                
+
                 {/* Position Controls */}
                 <div className="mb-3">
                   <label className="block text-sm text-gray-600 mb-1">
@@ -453,11 +520,13 @@ export const BackgroundStep = ({
                     max="1.0"
                     step="0.1"
                     value={backgroundOffsetX}
-                    onChange={(e) => setBackgroundOffsetX(parseFloat(e.target.value))}
+                    onChange={(e) =>
+                      setBackgroundOffsetX(parseFloat(e.target.value))
+                    }
                     className="w-full"
                   />
                 </div>
-                
+
                 <div className="mb-3">
                   <label className="block text-sm text-gray-600 mb-1">
                     Vertical Position ({backgroundOffsetY.toFixed(1)})
@@ -468,7 +537,9 @@ export const BackgroundStep = ({
                     max="1.0"
                     step="0.1"
                     value={backgroundOffsetY}
-                    onChange={(e) => setBackgroundOffsetY(parseFloat(e.target.value))}
+                    onChange={(e) =>
+                      setBackgroundOffsetY(parseFloat(e.target.value))
+                    }
                     className="w-full"
                   />
                 </div>
@@ -477,7 +548,9 @@ export const BackgroundStep = ({
 
             {/* Upload Background Image */}
             <div className="mb-6">
-              <label className="block text-sm font-medium text-gray-700 mb-2">Upload Background Image</label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Upload Background Image
+              </label>
               <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md">
                 <div className="space-y-1 text-center">
                   <svg
@@ -522,8 +595,8 @@ export const BackgroundStep = ({
             disabled={!backgroundRemovedImage || loading}
             className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white ${
               !backgroundRemovedImage || loading
-                ? 'bg-gray-300 cursor-not-allowed'
-                : 'bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500'
+                ? "bg-gray-300 cursor-not-allowed"
+                : "bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
             }`}
           >
             {loading ? (
@@ -549,33 +622,38 @@ export const BackgroundStep = ({
  */
 export const AdjustStep = ({
   backgroundChangedImage,
-  finalAdjustedImage, setFinalAdjustedImage,
-  brightness, setBrightness,
-  contrast, setContrast,
-  saturation, setSaturation,
-  backgroundRemovedFile, setBackgroundRemovedFile,
+  finalAdjustedImage,
+  setFinalAdjustedImage,
+  brightness,
+  setBrightness,
+  contrast,
+  setContrast,
+  saturation,
+  setSaturation,
+  backgroundRemovedFile,
+  setBackgroundRemovedFile,
   downloadFormat,
-  loading, setLoading,
-  setStep
+  loading,
+  setLoading,
+  setStep,
 }) => {
-
   const handleAdjustment = async (key, value) => {
     // Update state
-    if (key === 'brightness') setBrightness(value);
-    if (key === 'contrast') setContrast(value);
-    if (key === 'saturation') setSaturation(value);
-  
+    if (key === "brightness") setBrightness(value);
+    if (key === "contrast") setContrast(value);
+    if (key === "saturation") setSaturation(value);
+
     // Call the debounced function with the updated values
     const result = await debouncedAdjustImage(
-      backgroundRemovedFile, 
+      backgroundRemovedFile,
       {
-        brightness: key === 'brightness' ? value : brightness,
-        contrast: key === 'contrast' ? value : contrast,
-        saturation: key === 'saturation' ? value : saturation,
+        brightness: key === "brightness" ? value : brightness,
+        contrast: key === "contrast" ? value : contrast,
+        saturation: key === "saturation" ? value : saturation,
       },
       downloadFormat
     );
-    
+
     setFinalAdjustedImage(result.imageUrl);
     setBackgroundRemovedFile(result.imageFile);
   };
@@ -583,9 +661,12 @@ export const AdjustStep = ({
   return (
     <div className="bg-white shadow overflow-hidden sm:rounded-lg">
       <div className="px-4 py-5 sm:p-6">
-        <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">Adjust Photo</h3>
+        <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">
+          Adjust Photo
+        </h3>
         <p className="text-sm text-gray-500 mb-6">
-          Fine-tune your photo with these adjustment controls to get perfect results.
+          Fine-tune your photo with these adjustment controls to get perfect
+          results.
         </p>
 
         {/* Image Preview */}
@@ -599,50 +680,66 @@ export const AdjustStep = ({
                 className="max-h-64 shadow-sm"
               />
             ) : (
-              <div className="text-gray-400 py-8">No image preview available</div>
+              <div className="text-gray-400 py-8">
+                No image preview available
+              </div>
             )}
           </div>
         </div>
 
         {/* Adjustment Controls */}
         <div className="mb-6">
-          <h4 className="text-sm font-medium text-gray-700 mb-2">Image Adjustments</h4>
+          <h4 className="text-sm font-medium text-gray-700 mb-2">
+            Image Adjustments
+          </h4>
 
           <div className="space-y-4 mt-4">
             <div>
-              <label className="block text-sm text-gray-600 mb-1">Brightness ({brightness})</label>
+              <label className="block text-sm text-gray-600 mb-1">
+                Brightness ({brightness})
+              </label>
               <input
                 type="range"
                 min={-100}
                 max={100}
                 value={brightness}
-                onChange={(e) => handleAdjustment('brightness', parseInt(e.target.value))}
+                onChange={(e) =>
+                  handleAdjustment("brightness", parseInt(e.target.value))
+                }
                 className="w-full"
               />
             </div>
 
             <div>
-              <label className="block text-sm text-gray-600 mb-1">Contrast ({contrast.toFixed(2)})</label>
+              <label className="block text-sm text-gray-600 mb-1">
+                Contrast ({contrast.toFixed(2)})
+              </label>
               <input
                 type="range"
                 min={0.5}
                 max={3}
                 step={0.05}
                 value={contrast}
-                onChange={(e) => handleAdjustment('contrast', parseFloat(e.target.value))}
+                onChange={(e) =>
+                  handleAdjustment("contrast", parseFloat(e.target.value))
+                }
                 className="w-full"
               />
             </div>
 
             <div>
-              <label className="block text-sm text-gray-600 mb-1">Saturation ({saturation.toFixed(2)})</label>
+              <label className="block text-sm text-gray-600 mb-1">
+                Saturation ({saturation.toFixed(2)})
+              </label>
               <input
                 type="range"
                 min={0.5}
                 max={3}
                 step={0.05}
                 value={saturation}
-                onChange={(e) => handleAdjustment('saturation', parseFloat(e.target.value))}
+                onChange={(e) =>
+                  handleAdjustment("saturation", parseFloat(e.target.value))
+                }
                 className="w-full"
               />
             </div>
@@ -655,7 +752,7 @@ export const AdjustStep = ({
               setBrightness(0);
               setContrast(1);
               setSaturation(1);
-              handleAdjustment('brightness', 0);
+              handleAdjustment("brightness", 0);
             }}
             className="mt-4 inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-md text-primary-600 bg-primary-50 hover:bg-primary-100"
           >
@@ -670,8 +767,8 @@ export const AdjustStep = ({
             disabled={!finalAdjustedImage || loading}
             className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white ${
               !finalAdjustedImage || loading
-                ? 'bg-gray-300 cursor-not-allowed'
-                : 'bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500'
+                ? "bg-gray-300 cursor-not-allowed"
+                : "bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
             }`}
           >
             {loading ? (
@@ -700,31 +797,54 @@ export const CropStep = ({
   cropSizes,
   selectedSize,
   downloadFormat,
-  processedImage, setProcessedImage,
-  loading, setLoading,
+  processedImage,
+  setProcessedImage,
+  loading,
+  setLoading,
   setError,
-  customFilename, setCustomFilename,
-  imageSize, setImageSize
+  customFilename,
+  setCustomFilename,
+  useOutputFolder = false,
+  setUseOutputFolder,
+  handleDownload, // Use App.js handleDownload
+  setDownloadFormat,
+  imageSize,
+  setImageSize,
 }) => {
   const [crop, setCrop] = React.useState({
-    unit: '%',
+    unit: "%",
     width: 90,
     height: 90,
     x: 5,
-    y: 5
+    y: 5,
   });
   const [completedCrop, setCompletedCrop] = React.useState(null);
   const imgRef = useRef(null);
+  const [isFsApiSupported, setIsFsApiSupported] = React.useState(false);
+  React.useEffect(() => {
+    // Check if the File System Access API is supported
+    setIsFsApiSupported("showSaveFilePicker" in window);
+  }, []);
+  const handleDownloadClick = () => {
+    if (processedImage) {
+      handleDownload(processedImage, downloadFormat, useOutputFolder);
+    }
+  };
 
   const handleImageLoad = (e) => {
     const { naturalWidth, naturalHeight } = e.target;
-    
+
     // Store image dimensions for future reference
     setImageSize({ width: naturalWidth, height: naturalHeight });
-    
-    const aspectRatio = cropSizes[selectedSize].width / cropSizes[selectedSize].height;
-    const initialCrop = calculateInitialCrop(naturalWidth, naturalHeight, aspectRatio);
-    
+
+    const aspectRatio =
+      cropSizes[selectedSize].width / cropSizes[selectedSize].height;
+    const initialCrop = calculateInitialCrop(
+      naturalWidth,
+      naturalHeight,
+      aspectRatio
+    );
+
     setCrop(initialCrop);
   };
 
@@ -738,7 +858,7 @@ export const CropStep = ({
 
     try {
       setLoading(true);
-      
+
       // Calculate the target dimensions based on the selected format
       const targetDimensions = calculatePixelDimensions(
         cropSizes[selectedSize].width,
@@ -752,7 +872,7 @@ export const CropStep = ({
         targetDimensions,
         downloadFormat
       );
-      
+
       setProcessedImage(imageUrl);
     } catch (err) {
       setError(err.message);
@@ -761,22 +881,15 @@ export const CropStep = ({
     }
   };
 
-  const handleDownload = (url, format) => {
-    const filename = customFilename.trim() || 'passport-photo';
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `${filename}.${format}`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
   return (
     <div className="bg-white shadow overflow-hidden sm:rounded-lg">
       <div className="px-4 py-5 sm:p-6">
-        <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">Crop Photo</h3>
+        <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">
+          Crop Photo
+        </h3>
         <p className="text-sm text-gray-500 mb-6">
-          Adjust the cropping area to ensure proper head position and size for your {cropSizes[selectedSize].label}.
+          Adjust the cropping area to ensure proper head position and size for
+          your {cropSizes[selectedSize].label}.
         </p>
 
         {/* Crop Container */}
@@ -786,7 +899,9 @@ export const CropStep = ({
               crop={crop}
               onChange={(c) => setCrop(c)}
               onComplete={(c) => setCompletedCrop(c)}
-              aspect={cropSizes[selectedSize].width / cropSizes[selectedSize].height}
+              aspect={
+                cropSizes[selectedSize].width / cropSizes[selectedSize].height
+              }
               className="rounded-lg max-h-[500px] mx-auto"
             >
               <img
@@ -798,10 +913,11 @@ export const CropStep = ({
               />
             </ReactCrop>
           )}
-          
+
           <div className="mt-2 text-sm text-gray-500">
             <p>
-              Drag to move. Drag corners to resize. The person's eyes should be about 2/3 from the bottom of the photo.
+              Drag to move. Drag corners to resize. The person's eyes should be
+              about 2/3 from the bottom of the photo.
             </p>
           </div>
         </div>
@@ -813,8 +929,8 @@ export const CropStep = ({
             disabled={!completedCrop || loading}
             className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white ${
               !completedCrop || loading
-                ? 'bg-gray-300 cursor-not-allowed'
-                : 'bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500'
+                ? "bg-gray-300 cursor-not-allowed"
+                : "bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
             }`}
           >
             {loading ? (
@@ -834,25 +950,66 @@ export const CropStep = ({
         {/* Result Preview */}
         {processedImage && (
           <div className="mt-8 bg-gray-50 p-6 rounded-lg border border-gray-200 max-w-xl mx-auto">
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Processed Photo</h3>
-            
+            <h3 className="text-lg font-medium text-gray-900 mb-4">
+              Processed Photo
+            </h3>
+
             <div className="bg-white p-2 rounded-lg shadow-sm border border-gray-100 mb-4">
-              <img 
-                src={processedImage} 
-                alt="Processed" 
+              <img
+                src={processedImage}
+                alt="Processed"
                 className="mx-auto max-h-96"
               />
             </div>
-            
+
             <div className="text-sm text-gray-500 mb-4">
               <p>
-                Final size: {cropSizes[selectedSize].width}×{cropSizes[selectedSize].height} {cropSizes[selectedSize].unit}.
+                Final size: {cropSizes[selectedSize].width}×
+                {cropSizes[selectedSize].height} {cropSizes[selectedSize].unit}.
               </p>
+            </div>
+
+            {/* Output Format Selection */}
+            <div className="mb-4">
+              <label
+                htmlFor="download-format"
+                className="block text-sm font-medium text-gray-700 mb-1"
+              >
+                Output Format
+              </label>
+              <div className="relative">
+                <select
+                  id="download-format"
+                  value={downloadFormat}
+                  onChange={(e) => setDownloadFormat(e.target.value)}
+                  className="mt-1 block w-full pl-3 pr-10 py-2 text-base border border-gray-300 focus:outline-none focus:ring-gray-400 focus:border-gray-400 sm:text-sm rounded-md appearance-none"
+                >
+                  <option value="png">PNG</option>
+                  <option value="jpeg">JPEG</option>
+                </select>
+                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
+                  <svg
+                    className="h-4 w-4"
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 20 20"
+                    fill="currentColor"
+                  >
+                    <path
+                      fillRule="evenodd"
+                      d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                </div>
+              </div>
             </div>
 
             {/* Filename input field */}
             <div className="mb-4">
-              <label htmlFor="filename" className="block text-sm font-medium text-gray-700 mb-1">
+              <label
+                htmlFor="filename"
+                className="block text-sm font-medium text-gray-700 mb-1"
+              >
                 Filename
               </label>
               <div className="mt-1 flex rounded-md shadow-sm">
@@ -868,14 +1025,42 @@ export const CropStep = ({
                   .{downloadFormat}
                 </span>
               </div>
-            </div>    
+            </div>
+
+            {/* Folder selection checkbox */}
+            {isFsApiSupported && (
+              <div className="mb-4">
+                <div className="flex items-center">
+                  <input
+                    id="use-output-folder"
+                    name="use-output-folder"
+                    type="checkbox"
+                    checked={useOutputFolder}
+                    onChange={(e) => setUseOutputFolder(e.target.checked)}
+                    className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                  />
+                  <label
+                    htmlFor="use-output-folder"
+                    className="ml-2 block text-sm text-gray-700"
+                  >
+                    Select output folder when downloading
+                  </label>
+                </div>
+                <p className="mt-1 text-xs text-gray-500">
+                  This will open a file dialog to choose where to save your
+                  photo.
+                </p>
+              </div>
+            )}
 
             <button
-              onClick={() => handleDownload(processedImage, downloadFormat)}
-              className="w-full inline-flex justify-center items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-secondary-600 hover:bg-secondary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-secondary-500"
+              onClick={handleDownloadClick}
+              className="w-full inline-flex justify-center items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
             >
               <DocumentArrowDownIcon className="-ml-1 mr-2 h-5 w-5" />
-              Download Photo
+              {useOutputFolder && isFsApiSupported
+                ? "Save to Folder"
+                : "Download Photo"}
             </button>
           </div>
         )}
