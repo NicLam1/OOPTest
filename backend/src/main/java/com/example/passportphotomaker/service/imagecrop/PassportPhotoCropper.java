@@ -100,10 +100,6 @@ public class PassportPhotoCropper {
         int targetWidth = calculatePixelSize(photoWidth, photoUnit, dpi);
         int targetHeight = calculatePixelSize(photoHeight, photoUnit, dpi);
 
-        // Add a small buffer (1 pixel) to handle rounding errors
-        // targetWidth += 1;
-        // targetHeight += 1;
-
         if (debugMode) {
             System.out.println("Target dimensions: " + targetWidth + "x" + targetHeight + " pixels");
             System.out.println("Original image dimensions: " + image.width() + "x" + image.height() + " pixels");
@@ -111,26 +107,52 @@ public class PassportPhotoCropper {
                     "Face rectangle: " + faceRect.x + "," + faceRect.y + "," + faceRect.width + "," + faceRect.height);
         }
 
-        // Calculate the crop rectangle to center the face
-        int cropX = Math.max(0, faceRect.x - (faceRect.width / 2));
-        int cropY = Math.max(0, faceRect.y - (faceRect.height / 2));
-        int cropWidth = Math.min(image.width() - cropX, faceRect.width * 2);
-        int cropHeight = Math.min(image.height() - cropY, faceRect.height * 2);
-
+        // Determine the final aspect ratio
+        double targetAspectRatio = (double) targetWidth / targetHeight;
+        
+        // Calculate dimensions for crop that maintains target aspect ratio
+        // Use a larger area around the face to preserve more detail
+        double croppingFactor = 2.5; // Increased from 2.0 to get more context
+        int cropWidth = (int) (faceRect.width * croppingFactor);
+        int cropHeight = (int) (cropWidth / targetAspectRatio);
+        
+        // If calculated height is too small relative to face, adjust
+        if (cropHeight < faceRect.height * 2.0) {
+            cropHeight = (int) (faceRect.height * 2.0);
+            cropWidth = (int) (cropHeight * targetAspectRatio);
+        }
+        
+        // Center the crop area on the face
+        int cropX = faceRect.x + faceRect.width / 2 - cropWidth / 2;
+        int cropY = faceRect.y + faceRect.height / 2 - cropHeight / 2;
+        
         // Ensure the crop rectangle stays within image boundaries
+        cropX = Math.max(0, cropX);
+        cropY = Math.max(0, cropY);
+        
+        // Adjust dimensions if needed to maintain aspect ratio
         if (cropX + cropWidth > image.width()) {
             cropWidth = image.width() - cropX;
+            // Recalculate height to maintain aspect ratio
+            cropHeight = (int) (cropWidth / targetAspectRatio);
         }
+        
         if (cropY + cropHeight > image.height()) {
             cropHeight = image.height() - cropY;
+            // Recalculate width to maintain aspect ratio
+            cropWidth = (int) (cropHeight * targetAspectRatio);
         }
+        
+        // Final check to ensure we're in bounds
+        cropWidth = Math.min(cropWidth, image.width() - cropX);
+        cropHeight = Math.min(cropHeight, image.height() - cropY);
 
         // Extract the region of interest
         Mat roi = new Mat(image, new Rect(cropX, cropY, cropWidth, cropHeight));
 
-        // Resize to the target dimensions
+        // Resize to the target dimensions with higher quality interpolation
         Mat resized = new Mat();
-        Imgproc.resize(roi, resized, new Size(targetWidth, targetHeight), 0, 0, Imgproc.INTER_LINEAR);
+        Imgproc.resize(roi, resized, new Size(targetWidth, targetHeight), 0, 0, Imgproc.INTER_CUBIC);
 
         // Release resources
         roi.release();

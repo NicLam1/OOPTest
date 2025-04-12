@@ -15,6 +15,7 @@ import org.opencv.core.Mat;
 import org.opencv.core.Rect;
 import org.opencv.core.Scalar;
 import org.opencv.imgcodecs.Imgcodecs;
+import org.opencv.imgproc.Imgproc;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.ResourceLoader;
 import org.springframework.stereotype.Service;
@@ -161,10 +162,18 @@ public class PhotoService {
             // Save uploaded file to temporary location
             tempFile = uploadToTempFile(file);
 
-            // Load image using OpenCV
-            Mat originalImage = Imgcodecs.imread(tempFile.getAbsolutePath());
+            // Load image using OpenCV with improved quality settings
+            Mat originalImage = Imgcodecs.imread(tempFile.getAbsolutePath(), Imgcodecs.IMREAD_UNCHANGED);
             if (originalImage.empty()) {
                 throw new IOException("Failed to read image");
+            }
+
+            // Convert RGBA to RGB if needed
+            if (originalImage.channels() == 4) {
+                Mat rgbImage = new Mat();
+                Imgproc.cvtColor(originalImage, rgbImage, Imgproc.COLOR_RGBA2RGB);
+                originalImage.release();
+                originalImage = rgbImage;
             }
 
             // Size Validation

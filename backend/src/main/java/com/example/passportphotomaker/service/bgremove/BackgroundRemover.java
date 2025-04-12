@@ -103,14 +103,14 @@ public abstract class BackgroundRemover {
     }
 
     protected Mat createAlphaMatte(Mat mask) {
-        // For mostly hard edges with very slight feathering at the boundaries
+        // For high-quality, smooth edges with controlled feathering
         
         // Step 1: Create a binary mask as base
         Mat binaryMask = new Mat();
         Imgproc.threshold(mask, binaryMask, 127, 255, Imgproc.THRESH_BINARY);
         
-        // Step 2: Extract edge region only
-        Mat kernel = Imgproc.getStructuringElement(Imgproc.MORPH_ELLIPSE, new Size(4, 4));
+        // Step 2: Extract edge region only with more precision
+        Mat kernel = Imgproc.getStructuringElement(Imgproc.MORPH_ELLIPSE, new Size(5, 5));
         Mat dilatedMask = new Mat();
         Mat erodedMask = new Mat();
         
@@ -124,37 +124,54 @@ public abstract class BackgroundRemover {
         Mat edgeMask = new Mat();
         Core.subtract(dilatedMask, erodedMask, edgeMask);
         
-        // Step 3: Apply very subtle feathering to the edge regions
+        // Step 3: Apply more refined feathering to the edge regions
         Mat featheredMask = binaryMask.clone();
         
-        // Apply very light blur only to edge regions
+        // Create a multi-stage blur for more natural edges
         Mat blurredEdges = new Mat();
-        Imgproc.GaussianBlur(binaryMask, blurredEdges, new Size(10, 10), 1.5);
+        // First blur with small sigma for fine details
+        Imgproc.GaussianBlur(binaryMask, blurredEdges, new Size(3, 3), 0.8);
+        
+        // Second blur with larger sigma for more natural transition
+        Mat finalBlur = new Mat();
+        Imgproc.GaussianBlur(blurredEdges, finalBlur, new Size(7, 7), 1.5);
+        blurredEdges.release();
         
         // Copy the blurred edges to the edge mask region
-        blurredEdges.copyTo(featheredMask, edgeMask);
+        finalBlur.copyTo(featheredMask, edgeMask);
         
         // Clean up
         binaryMask.release();
         dilatedMask.release();
         erodedMask.release();
         edgeMask.release();
-        blurredEdges.release();
+        finalBlur.release();
         
         return featheredMask;
     }
 
     protected Mat createTransparentImage(Mat image, Mat alphaMask) {
-        // Create image with transparent background
+        // Create image with transparent background with high quality
         Mat result = new Mat();
+        
+        // Ensure we maintain the full color depth
         Imgproc.cvtColor(image, result, Imgproc.COLOR_BGR2BGRA);
 
         // Split channels
         List<Mat> channels = new ArrayList<>();
         Core.split(result, channels);
 
-        // Set alpha channel
-        alphaMask.copyTo(channels.get(3));
+        // Ensure alphaMask is properly scaled to match the image dimensions
+        if (alphaMask.size().width != image.size().width || 
+            alphaMask.size().height != image.size().height) {
+            Mat resizedMask = new Mat();
+            Imgproc.resize(alphaMask, resizedMask, image.size(), 0, 0, Imgproc.INTER_CUBIC);
+            resizedMask.copyTo(channels.get(3));
+            resizedMask.release();
+        } else {
+            // Set alpha channel directly if sizes match
+            alphaMask.copyTo(channels.get(3));
+        }
 
         // Merge channels
         Core.merge(channels, result);
