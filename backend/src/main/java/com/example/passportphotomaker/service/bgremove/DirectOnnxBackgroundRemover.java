@@ -534,93 +534,45 @@ public class DirectOnnxBackgroundRemover extends BackgroundRemover {
     }
     
     /**
-     * Apply edge-aware refinement to the mask
+     * Apply hard edge refinement to the mask
      */
     @Override
     protected Mat refineMaskEdges(Mat image, Mat mask) {
-        // Instead of removing all edges, we'll only process the boundary edges
+        // Apply strong thresholding for hard binary mask
+        Mat binaryMask = new Mat();
+        Imgproc.threshold(mask, binaryMask, 127, 255, Imgproc.THRESH_BINARY);
         
-        // First, find the contours of the mask (the silhouette boundary)
-        Mat maskCopy = mask.clone();
-        List<MatOfPoint> contours = new ArrayList<>();
-        Mat hierarchy = new Mat();
-        Imgproc.findContours(maskCopy, contours, hierarchy, Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_SIMPLE);
-        
-        // Create an empty mask for the boundary only
-        Mat boundaryMask = Mat.zeros(mask.size(), CvType.CV_8UC1);
-        
-        // Draw only the external contours with a small thickness
-        Imgproc.drawContours(boundaryMask, contours, -1, new Scalar(255), 2);
-        
-        // Dilate the boundary mask slightly to create a band around the silhouette
-        Mat dilatedBoundary = new Mat();
+        // Optional: Remove small noise and fill small holes
         Mat kernel = Imgproc.getStructuringElement(Imgproc.MORPH_ELLIPSE, new Size(5, 5));
-        Imgproc.dilate(boundaryMask, dilatedBoundary, kernel);
         
-        // Now detect edges in the image, but only consider them in the boundary area
-        Mat grayImage = new Mat();
-        Imgproc.cvtColor(image, grayImage, Imgproc.COLOR_BGR2GRAY);
+        // First close to fill small holes
+        Mat cleanedMask = new Mat();
+        Imgproc.morphologyEx(binaryMask, cleanedMask, Imgproc.MORPH_CLOSE, kernel);
         
-        Mat edges = new Mat();
-        Imgproc.Canny(grayImage, edges, 50, 150);
+        // Then open to remove small isolated pixels
+        Imgproc.morphologyEx(cleanedMask, cleanedMask, Imgproc.MORPH_OPEN, kernel);
         
-        // Only keep edges that are in the boundary area
-        Mat boundaryEdges = new Mat();
-        Core.bitwise_and(edges, dilatedBoundary, boundaryEdges);
+        // Final thresholding to ensure binary result
+        Mat finalMask = new Mat();
+        Imgproc.threshold(cleanedMask, finalMask, 127, 255, Imgproc.THRESH_BINARY);
         
-        // Further refine edges based on gradient strength
-        Mat refinedEdges = new Mat();
-        Imgproc.GaussianBlur(boundaryEdges, refinedEdges, new Size(3, 3), 0);
+        // Clean up resources
+        binaryMask.release();
+        cleanedMask.release();
         
-        // Apply the refined edge mask to the original mask
-        // Instead of just subtracting, we'll blend the edges in a more controlled way
-        Mat blendedMask = mask.clone();
-        
-        // Only modify pixels near the boundary
-        for (int y = 0; y < mask.rows(); y++) {
-            for (int x = 0; x < mask.cols(); x++) {
-                // If this is an edge pixel in the boundary
-                if (refinedEdges.get(y, x)[0] > 0) {
-                    // Get the original mask value
-                    double maskValue = mask.get(y, x)[0];
-                    
-                    // Reduce the mask value to create a smoother transition
-                    // but don't remove it completely
-                    double newValue = Math.max(0, maskValue - 100);
-                    blendedMask.put(y, x, newValue);
-                }
-            }
-        }
-        
-        // Clean up
-        maskCopy.release();
-        boundaryMask.release();
-        dilatedBoundary.release();
-        grayImage.release();
-        edges.release();
-        boundaryEdges.release();
-        refinedEdges.release();
-        hierarchy.release();
-        for (MatOfPoint contour : contours) {
-            contour.release();
-        }
-        
-        return blendedMask;
+        return finalMask;
     }
     
     /**
-     * Create alpha matte for smooth edges
+     * Create binary alpha matte (no transparency)
      */
     @Override
     protected Mat createAlphaMatte(Mat mask) {
-        // Convert binary mask to alpha matte
-        Mat alphaMatte = new Mat();
-        mask.convertTo(alphaMatte, CvType.CV_8UC1);
+        // For hard edges, we just want a binary mask with no transparency
+        Mat binaryMask = new Mat();
+        Imgproc.threshold(mask, binaryMask, 127, 255, Imgproc.THRESH_BINARY);
         
-        // Apply slight blur for smoother edges
-        Imgproc.GaussianBlur(alphaMatte, alphaMatte, new Size(3, 3), 0);
-        
-        return alphaMatte;
+        return binaryMask;
     }
     
     /**

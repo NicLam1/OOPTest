@@ -53,71 +53,39 @@ public abstract class BackgroundRemover {
 
     // Shared methods (can be used by all subclasses)
     protected Mat refineMaskEdges(Mat image, Mat mask) {
-        // Refine mask edges for better results
-
-        // Apply bilateral filter to smooth while preserving edges
-        Mat refinedMask = new Mat();
-        Imgproc.bilateralFilter(mask, refinedMask, 9, 75, 75);
-
-        // Morphological operations
-        Mat kernel = Imgproc.getStructuringElement(Imgproc.MORPH_ELLIPSE, new Size(5, 5));
-        Imgproc.morphologyEx(refinedMask, refinedMask, Imgproc.MORPH_CLOSE, kernel);
-
-        // Edge-aware filtering
-        Mat edges = new Mat();
-        Imgproc.Canny(image, edges, 100, 200);
-
-        // Dilate edges
-        Imgproc.dilate(edges, edges, Imgproc.getStructuringElement(Imgproc.MORPH_RECT, new Size(3, 3)));
-
-        // Use edges to refine boundaries
-        Mat edgeRefinedMask = new Mat();
-        Mat scalarMat = new Mat(mask.size(), mask.type(), Scalar.all(255));
-        Core.bitwise_and(refinedMask, scalarMat, edgeRefinedMask, edges);
-
-        // Combine with original
+        // Create hard edges instead of smooth transitions
+        
+        // Apply threshold to ensure binary mask (0 or 255 values only)
+        Mat binaryMask = new Mat();
+        Imgproc.threshold(mask, binaryMask, 127, 255, Imgproc.THRESH_BINARY);
+        
+        // Optional: Clean up small artifacts and holes
+        Mat kernel = Imgproc.getStructuringElement(Imgproc.MORPH_ELLIPSE, new Size(3, 3));
+        Mat cleanedMask = new Mat();
+        
+        // Close operation fills small holes
+        Imgproc.morphologyEx(binaryMask, cleanedMask, Imgproc.MORPH_CLOSE, kernel);
+        
+        // Open operation removes small artifacts
+        Imgproc.morphologyEx(cleanedMask, cleanedMask, Imgproc.MORPH_OPEN, kernel);
+        
+        // Ensure hard edges with another threshold operation
         Mat finalMask = new Mat();
-        Core.bitwise_or(refinedMask, edgeRefinedMask, finalMask);
-
+        Imgproc.threshold(cleanedMask, finalMask, 127, 255, Imgproc.THRESH_BINARY);
+        
         // Clean up
-        refinedMask.release();
-        edges.release();
-        edgeRefinedMask.release();
-        scalarMat.release();
-
+        binaryMask.release();
+        cleanedMask.release();
+        
         return finalMask;
     }
 
     protected Mat createAlphaMatte(Mat mask) {
-        // Create alpha matte with smooth transitions
-        Mat alphaMatte = new Mat();
-        mask.convertTo(alphaMatte, CvType.CV_32FC1, 1.0 / 255.0);
-
-        // Apply Gaussian blur for smooth transitions
-        Mat blurredMask = new Mat();
-        Imgproc.GaussianBlur(alphaMatte, blurredMask, new Size(9, 9), 0);
-
-        // Create gradient mask
-        Mat gradientMask = new Mat();
-        Imgproc.Laplacian(mask, gradientMask, CvType.CV_32F);
-        Core.convertScaleAbs(gradientMask, gradientMask);
-
-        // Normalize gradient
-        Core.normalize(gradientMask, gradientMask, 0, 1, Core.NORM_MINMAX, CvType.CV_32F);
-
-        // Blend masks
-        Mat result = new Mat();
-        Core.addWeighted(alphaMatte, 0.7, blurredMask, 0.3, 0, result);
-
-        // Convert to 8-bit
-        result.convertTo(result, CvType.CV_8UC1, 255);
-
-        // Clean up
-        alphaMatte.release();
-        blurredMask.release();
-        gradientMask.release();
-
-        return result;
+        // For hard edges, just ensure the mask is binary (no alpha transitions)
+        Mat binaryMask = new Mat();
+        Imgproc.threshold(mask, binaryMask, 127, 255, Imgproc.THRESH_BINARY);
+        
+        return binaryMask;
     }
 
     protected Mat createTransparentImage(Mat image, Mat alphaMask) {
