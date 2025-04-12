@@ -53,13 +53,13 @@ public abstract class BackgroundRemover {
 
     // Shared methods (can be used by all subclasses)
     protected Mat refineMaskEdges(Mat image, Mat mask) {
-        // Create hard edges instead of smooth transitions
+        // Create mostly hard edges with very slight feathering
         
-        // Apply threshold to ensure binary mask (0 or 255 values only)
+        // Step 1: Apply threshold to ensure binary mask (0 or 255 values only)
         Mat binaryMask = new Mat();
         Imgproc.threshold(mask, binaryMask, 127, 255, Imgproc.THRESH_BINARY);
         
-        // Optional: Clean up small artifacts and holes
+        // Step 2: Clean up small artifacts and holes
         Mat kernel = Imgproc.getStructuringElement(Imgproc.MORPH_ELLIPSE, new Size(3, 3));
         Mat cleanedMask = new Mat();
         
@@ -69,23 +69,79 @@ public abstract class BackgroundRemover {
         // Open operation removes small artifacts
         Imgproc.morphologyEx(cleanedMask, cleanedMask, Imgproc.MORPH_OPEN, kernel);
         
-        // Ensure hard edges with another threshold operation
-        Mat finalMask = new Mat();
-        Imgproc.threshold(cleanedMask, finalMask, 127, 255, Imgproc.THRESH_BINARY);
+        // Step 3: Extract edge region only (where feathering will be applied)
+        Mat dilatedMask = new Mat();
+        Mat erodedMask = new Mat();
+        
+        // Create dilated mask (slightly expanded)
+        Imgproc.dilate(cleanedMask, dilatedMask, kernel);
+        
+        // Create eroded mask (slightly contracted)
+        Imgproc.erode(cleanedMask, erodedMask, kernel);
+        
+        // Edge mask = dilated - eroded
+        Mat edgeMask = new Mat();
+        Core.subtract(dilatedMask, erodedMask, edgeMask);
+        
+        // Step 4: Apply very slight blur to the original mask
+        Mat slightlyBlurredMask = new Mat();
+        Imgproc.GaussianBlur(cleanedMask, slightlyBlurredMask, new Size(3, 3), 0.8);
+        
+        // Step 5: Combine - use slightly blurred mask only at the edges, keep the rest binary
+        Mat result = cleanedMask.clone();
+        slightlyBlurredMask.copyTo(result, edgeMask);
         
         // Clean up
         binaryMask.release();
         cleanedMask.release();
+        dilatedMask.release();
+        erodedMask.release();
+        edgeMask.release();
+        slightlyBlurredMask.release();
         
-        return finalMask;
+        return result;
     }
 
     protected Mat createAlphaMatte(Mat mask) {
-        // For hard edges, just ensure the mask is binary (no alpha transitions)
+        // For mostly hard edges with very slight feathering at the boundaries
+        
+        // Step 1: Create a binary mask as base
         Mat binaryMask = new Mat();
         Imgproc.threshold(mask, binaryMask, 127, 255, Imgproc.THRESH_BINARY);
         
-        return binaryMask;
+        // Step 2: Extract edge region only
+        Mat kernel = Imgproc.getStructuringElement(Imgproc.MORPH_ELLIPSE, new Size(4, 4));
+        Mat dilatedMask = new Mat();
+        Mat erodedMask = new Mat();
+        
+        // Dilate - slightly expand
+        Imgproc.dilate(binaryMask, dilatedMask, kernel);
+        
+        // Erode - slightly contract
+        Imgproc.erode(binaryMask, erodedMask, kernel);
+        
+        // Edge mask = dilated - eroded (narrow band around the edge)
+        Mat edgeMask = new Mat();
+        Core.subtract(dilatedMask, erodedMask, edgeMask);
+        
+        // Step 3: Apply very subtle feathering to the edge regions
+        Mat featheredMask = binaryMask.clone();
+        
+        // Apply very light blur only to edge regions
+        Mat blurredEdges = new Mat();
+        Imgproc.GaussianBlur(binaryMask, blurredEdges, new Size(10, 10), 1.5);
+        
+        // Copy the blurred edges to the edge mask region
+        blurredEdges.copyTo(featheredMask, edgeMask);
+        
+        // Clean up
+        binaryMask.release();
+        dilatedMask.release();
+        erodedMask.release();
+        edgeMask.release();
+        blurredEdges.release();
+        
+        return featheredMask;
     }
 
     protected Mat createTransparentImage(Mat image, Mat alphaMask) {

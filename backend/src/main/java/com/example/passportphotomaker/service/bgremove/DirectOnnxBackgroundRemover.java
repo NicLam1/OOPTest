@@ -534,45 +534,99 @@ public class DirectOnnxBackgroundRemover extends BackgroundRemover {
     }
     
     /**
-     * Apply hard edge refinement to the mask
+     * Apply edge refinement with very slight feathering
      */
     @Override
     protected Mat refineMaskEdges(Mat image, Mat mask) {
-        // Apply strong thresholding for hard binary mask
+        // Step 1: Apply threshold to create a binary mask
         Mat binaryMask = new Mat();
         Imgproc.threshold(mask, binaryMask, 127, 255, Imgproc.THRESH_BINARY);
         
-        // Optional: Remove small noise and fill small holes
+        // Step 2: Clean up small artifacts and holes
         Mat kernel = Imgproc.getStructuringElement(Imgproc.MORPH_ELLIPSE, new Size(5, 5));
-        
-        // First close to fill small holes
         Mat cleanedMask = new Mat();
+        
+        // Close operation to fill gaps
         Imgproc.morphologyEx(binaryMask, cleanedMask, Imgproc.MORPH_CLOSE, kernel);
         
-        // Then open to remove small isolated pixels
+        // Open operation to remove small islands
         Imgproc.morphologyEx(cleanedMask, cleanedMask, Imgproc.MORPH_OPEN, kernel);
         
-        // Final thresholding to ensure binary result
-        Mat finalMask = new Mat();
-        Imgproc.threshold(cleanedMask, finalMask, 127, 255, Imgproc.THRESH_BINARY);
+        // Step 3: Create edge mask to identify boundary regions
+        Mat dilatedMask = new Mat();
+        Mat erodedMask = new Mat();
+        
+        // Use a smaller kernel for edge detection to keep feathering minimal
+        Mat edgeKernel = Imgproc.getStructuringElement(Imgproc.MORPH_ELLIPSE, new Size(3, 3));
+        
+        // Dilate - expand slightly
+        Imgproc.dilate(cleanedMask, dilatedMask, edgeKernel);
+        
+        // Erode - contract slightly
+        Imgproc.erode(cleanedMask, erodedMask, edgeKernel);
+        
+        // Edge mask = dilated - eroded (narrow band at the boundary)
+        Mat edgeMask = new Mat();
+        Core.subtract(dilatedMask, erodedMask, edgeMask);
+        
+        // Step 4: Apply very slight blur to the mask
+        Mat slightlyBlurredMask = new Mat();
+        Imgproc.GaussianBlur(cleanedMask, slightlyBlurredMask, new Size(3, 3), 0.8);
+        
+        // Step 5: Combine - use blurred mask only at the edges
+        Mat result = cleanedMask.clone();
+        slightlyBlurredMask.copyTo(result, edgeMask);
         
         // Clean up resources
         binaryMask.release();
         cleanedMask.release();
+        dilatedMask.release();
+        erodedMask.release();
+        edgeMask.release();
+        slightlyBlurredMask.release();
         
-        return finalMask;
+        return result;
     }
     
     /**
-     * Create binary alpha matte (no transparency)
+     * Create alpha matte with very subtle edge feathering
      */
     @Override
     protected Mat createAlphaMatte(Mat mask) {
-        // For hard edges, we just want a binary mask with no transparency
+        // Step 1: Start with a binary mask
         Mat binaryMask = new Mat();
         Imgproc.threshold(mask, binaryMask, 127, 255, Imgproc.THRESH_BINARY);
         
-        return binaryMask;
+        // Step 2: Identify edge regions
+        Mat smallKernel = Imgproc.getStructuringElement(Imgproc.MORPH_ELLIPSE, new Size(2, 2));
+        Mat dilatedMask = new Mat();
+        Mat erodedMask = new Mat();
+        
+        // Create narrow band around the edges
+        Imgproc.dilate(binaryMask, dilatedMask, smallKernel);
+        Imgproc.erode(binaryMask, erodedMask, smallKernel);
+        
+        // Edge mask = dilated - eroded
+        Mat edgeMask = new Mat();
+        Core.subtract(dilatedMask, erodedMask, edgeMask);
+        
+        // Step 3: Apply subtle blur
+        Mat blurredMask = new Mat();
+        // Very small sigma (0.5) for minimal feathering
+        Imgproc.GaussianBlur(binaryMask, blurredMask, new Size(3, 3), 0.5);
+        
+        // Step 4: Only apply blur at the edges
+        Mat result = binaryMask.clone();
+        blurredMask.copyTo(result, edgeMask);
+        
+        // Clean up resources
+        binaryMask.release();
+        dilatedMask.release();
+        erodedMask.release();
+        edgeMask.release();
+        blurredMask.release();
+        
+        return result;
     }
     
     /**
