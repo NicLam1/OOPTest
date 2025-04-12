@@ -113,15 +113,61 @@ Change the version to `1.21.0` and rebuild:
 mvn clean install
 mvn spring-boot:run
 ```
+  
+## Project Structure
+**Backend:** Java Spring Boot application handling image processing with OpenCV and AI-based background removal
 
-## Architecture
+```
+backend/
+├── models/
+│   └── u2net.onnx                     # Pre-trained U2Net model for background removal
+├── src/
+│   └── main/
+│       └── java/
+│           └── com/
+│               └── example/
+│                   └── passportphotomaker/
+│                       ├── controller/             # REST API controllers
+│                       │   └── PhotoController.java
+│                       └── service/                # Business logic services
+│                           ├── PhotoService.java
+│                           ├── bgchange/           # Background changing functionality
+│                           │   └── BackgroundChanger.java
+│                           ├── bgremove/           # Background removal functionality
+│                           │   └── BackgroundRemover.java
+│                           ├── facedetect/         # Face detection functionality
+│                           │   └── FaceDetector.java
+│                           ├── imagecrop/          # Image cropping functionality
+│                           │   ├── ImageCropper.java
+│                           │   └── PassportPhotoCropper.java
+│                           └── imageedit/          # Image adjustment functionality
+│                               └── ImageAdjuster.java
+├── resources/                         # Application resources
+└── target/                            # Build output directory
+├── beach.png                      # Sample background image
+└── debug_images/                  # Debug output from image processing
+```
 
-- **Backend:** Java Spring Boot application handling image processing with OpenCV and AI-based background removal
-- **Frontend:** React + Tailwind CSS application with a step-by-step UI process for photo editing
+**Frontend:** React + Tailwind CSS application with a step-by-step UI process for photo editing
+```
+frontend/
+├── node_modules/             # NPM dependencies
+├── public/                   # Static files
+└── src/
+    ├── components/           # React components
+    │   └── Steps.js          # Step-by-step UI components
+    ├── utils/                # Utility functions
+    ├── App.js                # Main application component
+    ├── constants.js          # Application constants
+    ├── index.css             # Global CSS
+    ├── index.js              # Application entry point
+    ├── postcss.config.js     # PostCSS configuration
+    └── tailwind.config.js    # Tailwind CSS configuration
+```
 
 ## License
 
-This project is licensed under the OOPG1T6 - JK its not a real one.
+This project is licensed under the IS442G1T6 - JK its not a real one.
 
 ## Acknowledgments
 
